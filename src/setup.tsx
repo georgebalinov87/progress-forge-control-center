@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { usePrototype } from "./prototype";
 import type {
@@ -142,19 +143,12 @@ export function SetupFlow() {
   const [searchParams] = useSearchParams();
   const [state, setState] = useState<SetupState>(initialState);
   const [guidance, setGuidance] = useState<string | null>(null);
-  const [pendingProject, setPendingProject] = useState<Project | null>(null);
   const returnTo = searchParams.get("returnTo") ?? projects[0]?.id;
   const isReturning = projects.length > 0;
 
   const cancel = () => {
     if (!window.confirm("Discard the setup information entered so far?")) return;
     navigate(isReturning && returnTo ? `/projects/${returnTo}` : "/setup/welcome");
-  };
-
-  const openProject = () => {
-    if (!pendingProject) return;
-    addProject(pendingProject);
-    navigate(`/projects/${pendingProject.id}`);
   };
 
   const openExistingProject = () => {
@@ -316,8 +310,10 @@ export function SetupFlow() {
                 onBack={() => navigate(withReturn("/setup/project-details", returnTo))}
                 onCancel={cancel}
                 onValidated={(project) => {
-                  setPendingProject(project);
-                  navigate(withReturn("/setup/complete", returnTo));
+                  flushSync(() => {
+                    addProject(project);
+                  });
+                  navigate(`/projects/${project.id}`);
                 }}
               />
             }
@@ -325,15 +321,7 @@ export function SetupFlow() {
           <Route
             path="complete"
             element={
-              pendingProject ? (
-                <CompletePage
-                  project={pendingProject}
-                  onOpen={openProject}
-                  onReview={() => navigate(withReturn("/setup/review", returnTo))}
-                />
-              ) : (
-                <Navigate to={withReturn("/setup/review", returnTo)} replace />
-              )
+              <Navigate to={withReturn("/setup/review", returnTo)} replace />
             }
           />
           <Route
@@ -1139,25 +1127,27 @@ function ReviewStep({
         <span>Prototype control: simulate validation failure</span>
       </label>
       <div className="setup-review-footer">
-        <button className="setup-button ghost" onClick={onCancel}>Cancel</button>
-        <div>
-          <button className="setup-button secondary" onClick={onBack}>
-            <ArrowLeft size={15} /> Back
-          </button>
-          <button
-            className="setup-button primary"
-            disabled={state.validationStatus === "validating"}
-            onClick={() => {
-              setValidationIndex(0);
-              setState((current) => ({
-                ...current,
-                validationStatus: "validating",
-                validationMessage: undefined,
-              }));
-            }}
-          >
-            <ShieldCheck size={16} /> Validate and add project
-          </button>
+        <div className="setup-footer-bar">
+          <button className="setup-button ghost" onClick={onCancel}>Cancel</button>
+          <div>
+            <button className="setup-button secondary" onClick={onBack}>
+              <ArrowLeft size={15} /> Back
+            </button>
+            <button
+              className="setup-button primary"
+              disabled={state.validationStatus === "validating"}
+              onClick={() => {
+                setValidationIndex(0);
+                setState((current) => ({
+                  ...current,
+                  validationStatus: "validating",
+                  validationMessage: undefined,
+                }));
+              }}
+            >
+              <ShieldCheck size={16} /> Validate and add project
+            </button>
+          </div>
         </div>
       </div>
     </>
@@ -1246,18 +1236,20 @@ function SetupFooter({
 }) {
   return (
     <div className="setup-footer">
-      <button className="setup-button ghost" onClick={onCancel}>Cancel</button>
-      <div>
-        {onBack && (
-          <button className="setup-button secondary" onClick={onBack}>
-            <ArrowLeft size={15} /> Back
-          </button>
-        )}
-        {!hideContinue && (
-          <button className="setup-button primary" onClick={onContinue} disabled={disabled}>
-            {continueLabel} <ArrowRight size={15} />
-          </button>
-        )}
+        <div className="setup-footer-bar">
+          <button className="setup-button ghost" onClick={onCancel}>Cancel</button>
+          <div>
+          {onBack && (
+            <button className="setup-button secondary" onClick={onBack}>
+              <ArrowLeft size={15} /> Back
+            </button>
+          )}
+          {!hideContinue && (
+            <button className="setup-button primary" onClick={onContinue} disabled={disabled}>
+              {continueLabel} <ArrowRight size={15} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1279,13 +1271,13 @@ function ConnectionPanel({
   onStatus: (status: ConnectionStatus) => void;
 }) {
   return (
-    <div className="connection-detail-card">
-      <div className="connection-detail-heading">
-        <span><Icon size={20} /></span>
+    <div className="setup-section connection-panel">
+      <div className="connection-panel-header">
+        <span className="connection-panel-icon"><Icon size={18} /></span>
         <div>
           <strong>{title}</strong>
           <p>{details}</p>
-        </div>
+          </div>
       </div>
       <ConnectionStatusLine status={status} connectedText={connectedText} />
       <StatusControls status={status} onStatus={onStatus} />

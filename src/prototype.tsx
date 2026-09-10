@@ -108,11 +108,15 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      setWorkflows((current) =>
-        current.map((workflow) => {
+      setWorkflows((current) => {
+        let changed = false;
+
+        const next = current.map((workflow): WorkflowRun => {
           if (!workflow.simulated || workflow.status !== "running") return workflow;
           const runningIndex = workflow.steps.findIndex((item) => item.status === "running");
           if (runningIndex < 0) return workflow;
+
+          changed = true;
           const running = workflow.steps[runningIndex];
           const nextProgress = Math.min((running.progress ?? 0) + 12, 100);
           const steps = workflow.steps.map((item, index) =>
@@ -182,8 +186,10 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
           }
 
           return { ...workflow, steps };
-        }),
-      );
+        });
+
+        return changed ? next : current;
+      });
     }, 900);
     return () => window.clearInterval(interval);
   }, []);
