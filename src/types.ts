@@ -81,14 +81,12 @@ export type ConnectionStatus =
   | "needs_authentication"
   | "failed";
 
-export type SetupMode = "new" | "import";
-export type CodePlatform = "github" | "bitbucket" | "local" | "other";
+export type SetupMode = "initialize" | "join";
+export type CodePlatform = "github" | "bitbucket" | "gitlab" | "other";
 export type IssueTracker =
   | "github_issues"
   | "jira"
   | "azure_devops"
-  | "shortcut"
-  | "local"
   | "other";
 export type CodingAgent = "github_copilot" | "claude_code" | "opencode";
 export type ModelProfile = "stable" | "balanced" | "lite";

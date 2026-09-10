@@ -5,7 +5,6 @@ import {
   Bot,
   Check,
   CheckCircle2,
-  ChevronRight,
   Circle,
   Cloud,
   Code2,
@@ -14,10 +13,8 @@ import {
   FileText,
   Folder,
   Github,
-  HardDrive,
   HelpCircle,
-  Import,
-  Laptop,
+  Hammer,
   LoaderCircle,
   Package,
   Play,
@@ -26,20 +23,13 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
-  TestTube2,
   TriangleAlert,
   WandSparkles,
   X,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { usePrototype } from "./prototype";
 import type {
@@ -53,13 +43,16 @@ import type {
   SetupMode,
 } from "./types";
 
+type RepositoryScenario = "new_forge" | "existing_forge" | "not_repo";
 type ValidationStatus = "idle" | "validating" | "valid" | "invalid";
+
 type SetupState = {
   mode: SetupMode;
   localPath: string;
-  repositoryDetected: boolean;
-  existingConfigurationDetected: boolean;
+  repositoryUrl: string;
   environmentReady: boolean;
+  repositoryScenario: RepositoryScenario;
+  existingProjectId: string;
   codePlatform: CodePlatform;
   codePlatformStatus: ConnectionStatus;
   issueTracker: IssueTracker;
@@ -74,16 +67,52 @@ type SetupState = {
 
 const repositoryOptions = [
   "/Users/stefan/work/healthcare-app-angular",
-  "/Users/stefan/work/project-nia",
+  "/Users/stefan/work/project-forge",
   "/Users/stefan/work/new-project",
 ];
 
+const steps = [
+  { path: "project", label: "Project" },
+  { path: "coding-agent", label: "Coding agent" },
+  { path: "code-platform", label: "Code platform" },
+  { path: "issue-tracker", label: "Issue tracker" },
+  { path: "project-details", label: "Project details" },
+  { path: "review", label: "Review" },
+];
+
+const platformLabels: Record<CodePlatform, string> = {
+  github: "GitHub",
+  bitbucket: "Bitbucket",
+  gitlab: "GitLab",
+  other: "Other",
+};
+
+const trackerLabels: Record<IssueTracker, string> = {
+  github_issues: "GitHub Issues",
+  jira: "Jira",
+  azure_devops: "Azure DevOps",
+  other: "Other integrations",
+};
+
+const agentLabels: Record<CodingAgent, string> = {
+  github_copilot: "GitHub Copilot",
+  claude_code: "Claude Code",
+  opencode: "OpenCode",
+};
+
+const modelLabels: Record<ModelProfile, string> = {
+  stable: "Stable",
+  balanced: "Balanced",
+  lite: "Lite",
+};
+
 const initialState = (): SetupState => ({
-  mode: "new",
-  localPath: repositoryOptions[0],
-  repositoryDetected: true,
-  existingConfigurationDetected: false,
-  environmentReady: true,
+  mode: "initialize",
+  localPath: "",
+  repositoryUrl: "",
+  environmentReady: false,
+  repositoryScenario: "new_forge",
+  existingProjectId: "forge-core",
   codePlatform: "github",
   codePlatformStatus: "connected",
   issueTracker: "github_issues",
@@ -106,41 +135,6 @@ const initialState = (): SetupState => ({
   validationStatus: "idle",
 });
 
-const steps = [
-  { path: "project", label: "Project" },
-  { path: "code-platform", label: "Code platform" },
-  { path: "issue-tracker", label: "Issue tracker" },
-  { path: "coding-agent", label: "Coding agent" },
-  { path: "model-profile", label: "Model profile" },
-  { path: "project-details", label: "Project details" },
-  { path: "review", label: "Review" },
-];
-
-const platformLabels: Record<CodePlatform, string> = {
-  github: "GitHub",
-  bitbucket: "Bitbucket",
-  local: "Local only",
-  other: "Other / Not connected",
-};
-const trackerLabels: Record<IssueTracker, string> = {
-  github_issues: "GitHub Issues",
-  jira: "Jira",
-  azure_devops: "Azure DevOps",
-  shortcut: "Shortcut",
-  local: "Local only",
-  other: "Other integrations",
-};
-const agentLabels: Record<CodingAgent, string> = {
-  github_copilot: "GitHub Copilot",
-  claude_code: "Claude Code",
-  opencode: "OpenCode",
-};
-const modelLabels: Record<ModelProfile, string> = {
-  stable: "Stable",
-  balanced: "Balanced",
-  lite: "Lite",
-};
-
 export function SetupFlow() {
   const { projects, loadDemoWorkspace, addProject } = usePrototype();
   const navigate = useNavigate();
@@ -151,31 +145,6 @@ export function SetupFlow() {
   const [pendingProject, setPendingProject] = useState<Project | null>(null);
   const returnTo = searchParams.get("returnTo") ?? projects[0]?.id;
   const isReturning = projects.length > 0;
-
-  const update = <K extends keyof SetupState>(key: K, value: SetupState[K]) =>
-    setState((current) => ({ ...current, [key]: value }));
-
-  const startImport = () => {
-    setState((current) => ({
-      ...current,
-      mode: "import",
-      existingConfigurationDetected: true,
-      localPath: "/Users/stefan/work/project-nia",
-      codePlatform: "github",
-      issueTracker: "github_issues",
-      codingAgent: "github_copilot",
-      modelProfile: "stable",
-      metadata: {
-        name: "project-nia",
-        description: "Nia workflow orchestration project",
-        language: "TypeScript",
-        frameworks: ["React", "Node.js"],
-        testingFramework: "Vitest",
-        packageManager: "npm",
-      },
-    }));
-    navigate(`/setup/project${returnTo ? `?returnTo=${returnTo}` : ""}`);
-  };
 
   const cancel = () => {
     if (!window.confirm("Discard the setup information entered so far?")) return;
@@ -188,6 +157,11 @@ export function SetupFlow() {
     navigate(`/projects/${pendingProject.id}`);
   };
 
+  const openExistingProject = () => {
+    if (!projects.length) loadDemoWorkspace();
+    navigate(`/projects/${state.existingProjectId}`);
+  };
+
   const currentPath = location.pathname.split("/").pop() ?? "welcome";
   const currentIndex = steps.findIndex((step) => step.path === currentPath);
   const wizardVisible = currentIndex >= 0;
@@ -196,8 +170,11 @@ export function SetupFlow() {
     <div className="setup-shell">
       <header className="setup-topbar">
         <div className="setup-brand">
-          <span className="setup-brand-mark">n</span>
-          <span><strong>nia</strong><small>Control Center</small></span>
+          <span className="setup-brand-mark"><Hammer size={16} /></span>
+          <span>
+            <strong>forge</strong>
+            <small>Control Center</small>
+          </span>
         </div>
         <span className="setup-mode-label">{isReturning ? "Add project" : "First-time setup"}</span>
       </header>
@@ -211,11 +188,30 @@ export function SetupFlow() {
                 <Navigate to={`/projects/${projects[0].id}`} replace />
               ) : (
                 <WelcomePage
-                  onStart={() => navigate("/setup/project")}
-                  onImport={startImport}
+                  onStartInitialize={() => {
+                    setState((current) => ({
+                      ...current,
+                      mode: "initialize",
+                      localPath: "",
+                      repositoryUrl: "",
+                      environmentReady: false,
+                    }));
+                    navigate("/setup/project");
+                  }}
+                  onStartJoin={() => {
+                    setState((current) => ({
+                      ...current,
+                      mode: "join",
+                      repositoryScenario: "existing_forge",
+                      localPath: "",
+                      repositoryUrl: "",
+                      environmentReady: false,
+                    }));
+                    navigate("/setup/project");
+                  }}
                   onLoadDemo={() => {
                     loadDemoWorkspace();
-                    navigate("/projects/nia-core");
+                    navigate("/projects/forge-core");
                   }}
                 />
               )
@@ -227,12 +223,35 @@ export function SetupFlow() {
               <ProjectSourceStep
                 state={state}
                 setState={setState}
-                onGuidance={() => setGuidance("environment")}
                 footer={
                   <SetupFooter
                     onCancel={cancel}
+                    onContinue={() => {
+                      if (state.repositoryScenario === "existing_forge") {
+                        openExistingProject();
+                        return;
+                      }
+                      navigate(withReturn("/setup/coding-agent", returnTo));
+                    }}
+                    continueLabel={state.repositoryScenario === "existing_forge" ? "Open project dashboard" : "Continue"}
+                    disabled={!state.environmentReady || state.repositoryScenario === "not_repo"}
+                  />
+                }
+              />
+            }
+          />
+          <Route
+            path="coding-agent"
+            element={
+              <CodingAgentStep
+                state={state}
+                setState={setState}
+                onGuidance={(agent) => setGuidance(agent)}
+                footer={
+                  <SetupFooter
+                    onBack={() => navigate(withReturn("/setup/project", returnTo))}
+                    onCancel={cancel}
                     onContinue={() => navigate(withReturn("/setup/code-platform", returnTo))}
-                    continueLabel="Continue"
                   />
                 }
               />
@@ -246,15 +265,9 @@ export function SetupFlow() {
                 setState={setState}
                 footer={
                   <SetupFooter
-                    onBack={() => navigate(withReturn("/setup/project", returnTo))}
+                    onBack={() => navigate(withReturn("/setup/coding-agent", returnTo))}
                     onCancel={cancel}
-                    onContinue={() => {
-                      if (state.codePlatform === "github" && state.issueTracker === "local") {
-                        update("issueTracker", "github_issues");
-                        update("issueTrackerStatus", "connected");
-                      }
-                      navigate(withReturn("/setup/issue-tracker", returnTo));
-                    }}
+                    onContinue={() => navigate(withReturn("/setup/issue-tracker", returnTo))}
                   />
                 }
               />
@@ -270,39 +283,6 @@ export function SetupFlow() {
                   <SetupFooter
                     onBack={() => navigate(withReturn("/setup/code-platform", returnTo))}
                     onCancel={cancel}
-                    onContinue={() => navigate(withReturn("/setup/coding-agent", returnTo))}
-                  />
-                }
-              />
-            }
-          />
-          <Route
-            path="coding-agent"
-            element={
-              <CodingAgentStep
-                state={state}
-                setState={setState}
-                onGuidance={(agent) => setGuidance(agent)}
-                footer={
-                  <SetupFooter
-                    onBack={() => navigate(withReturn("/setup/issue-tracker", returnTo))}
-                    onCancel={cancel}
-                    onContinue={() => navigate(withReturn("/setup/model-profile", returnTo))}
-                  />
-                }
-              />
-            }
-          />
-          <Route
-            path="model-profile"
-            element={
-              <ModelProfileStep
-                state={state}
-                setState={setState}
-                footer={
-                  <SetupFooter
-                    onBack={() => navigate(withReturn("/setup/coding-agent", returnTo))}
-                    onCancel={cancel}
                     onContinue={() => navigate(withReturn("/setup/project-details", returnTo))}
                   />
                 }
@@ -317,7 +297,7 @@ export function SetupFlow() {
                 setState={setState}
                 footer={
                   <SetupFooter
-                    onBack={() => navigate(withReturn("/setup/model-profile", returnTo))}
+                    onBack={() => navigate(withReturn("/setup/issue-tracker", returnTo))}
                     onCancel={cancel}
                     onContinue={() => navigate(withReturn("/setup/review", returnTo))}
                     disabled={!metadataValid(state.metadata)}
@@ -333,17 +313,12 @@ export function SetupFlow() {
                 state={state}
                 setState={setState}
                 returnTo={returnTo}
+                onBack={() => navigate(withReturn("/setup/project-details", returnTo))}
+                onCancel={cancel}
                 onValidated={(project) => {
                   setPendingProject(project);
                   navigate(withReturn("/setup/complete", returnTo));
                 }}
-                footer={
-                  <SetupFooter
-                    onBack={() => navigate(withReturn("/setup/project-details", returnTo))}
-                    onCancel={cancel}
-                    hideContinue
-                  />
-                }
               />
             }
           />
@@ -395,51 +370,43 @@ function SetupStepper({ current }: { current: number }) {
 }
 
 function WelcomePage({
-  onStart,
-  onImport,
+  onStartInitialize,
+  onStartJoin,
   onLoadDemo,
 }: {
-  onStart: () => void;
-  onImport: () => void;
+  onStartInitialize: () => void;
+  onStartJoin: () => void;
   onLoadDemo: () => void;
 }) {
   return (
     <div className="welcome-card">
       <div className="welcome-visual">
-        <span className="welcome-logo">n</span>
+        <span className="welcome-logo"><Hammer size={22} /></span>
         <div className="welcome-orbit one"><Folder size={18} /></div>
         <div className="welcome-orbit two"><Github size={18} /></div>
         <div className="welcome-orbit three"><Bot size={18} /></div>
       </div>
       <span className="setup-eyebrow">Get started</span>
-      <h1>Welcome to Nia</h1>
+      <h1>Welcome to Forge</h1>
       <p>
-        Set up your first project to connect its repository, issue tracker, coding agent,
-        and project context.
+        This is a visual prototype. Every branch in setup is simulated so you can demo both
+        initializing a project and joining an existing Forge workspace.
       </p>
-      <button className="setup-button primary large" onClick={onStart}>
-        <Folder size={17} /> Add your first project <ArrowRight size={16} />
+      <button className="setup-button primary large" onClick={onStartInitialize}>
+        <Folder size={17} /> Initialize new project <ArrowRight size={16} />
       </button>
-      <button className="setup-button secondary large" onClick={onImport}>
-        <Import size={17} /> Import existing configuration
+      <button className="setup-button secondary large" onClick={onStartJoin}>
+        <Search size={17} /> Join existing project
       </button>
       <div className="welcome-demo">
         <span>Prototype only</span>
-        <button onClick={onLoadDemo}><Play size={14} /> Load demo workspace</button>
+        <button className="setup-demo-button" onClick={onLoadDemo}><Play size={14} /> Load demo workspace</button>
       </div>
     </div>
   );
 }
 
-function StepHeader({
-  eyebrow,
-  title,
-  description,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-}) {
+function StepHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
   return (
     <div className="setup-page-header">
       <span className="setup-eyebrow">{eyebrow}</span>
@@ -452,168 +419,194 @@ function StepHeader({
 function ProjectSourceStep({
   state,
   setState,
-  onGuidance,
   footer,
 }: {
   state: SetupState;
   setState: React.Dispatch<React.SetStateAction<SetupState>>;
-  onGuidance: () => void;
   footer: ReactNode;
 }) {
-  const setMode = (mode: SetupMode) =>
+  const [checkState, setCheckState] = useState<"idle" | "checking" | "done">("idle");
+  const hasRepoSelection =
+    state.mode === "join" ? Boolean(state.repositoryUrl.trim()) : Boolean(state.localPath.trim());
+
+  useEffect(() => {
+    if (!hasRepoSelection || checkState !== "idle") return;
+    runCheck();
+  }, [checkState, hasRepoSelection]);
+
+  const runCheck = (nextScenario?: RepositoryScenario) => {
+    const scenario = nextScenario ?? state.repositoryScenario;
+    setCheckState("checking");
     setState((current) => ({
       ...current,
-      mode,
-      existingConfigurationDetected: mode === "import",
-      localPath: mode === "import" ? "/Users/stefan/work/project-nia" : repositoryOptions[0],
+      repositoryScenario: scenario,
+      environmentReady: false,
     }));
+    window.setTimeout(() => {
+      setState((current) => ({
+        ...current,
+        repositoryScenario: scenario,
+        environmentReady: scenario !== "not_repo",
+      }));
+      setCheckState("done");
+    }, 550);
+  };
+
+  const scenarioLabel =
+    state.repositoryScenario === "existing_forge"
+      ? "Existing Forge project detected (simulated)"
+      : state.repositoryScenario === "new_forge"
+        ? "GitHub repository without Forge setup detected (simulated)"
+        : "Selected folder is not a valid GitHub repository (simulated)";
+
   return (
     <>
       <StepHeader
-        eyebrow="Step 1 of 7"
-        title="Choose the project source"
-        description="Select a local repository and confirm that the mocked setup prerequisites are available."
+        eyebrow="Step 1 of 6"
+        title="Project"
+        description="Select a repository source, then run a simulated environment and repo check. No real commands are executed."
       />
-      <SetupSection title="Environment check" description="These checks are simulated for the prototype. No commands are executed.">
+      <SetupSection title="Project folder" description="Pick how you want to start this demo.">
+        <div className="setup-inline-actions compact-links">
+          <button
+            className={state.mode === "initialize" ? "setup-link-button active-link" : "setup-link-button"}
+            onClick={() =>
+              {
+                setCheckState("idle");
+                setState((current) => ({
+                  ...current,
+                  mode: "initialize",
+                  repositoryScenario: "new_forge",
+                  repositoryUrl: "",
+                  environmentReady: false,
+                }));
+              }
+            }
+          >
+            <Folder size={14} /> Initialize project
+          </button>
+          <button
+            className={state.mode === "join" ? "setup-link-button active-link" : "setup-link-button"}
+            onClick={() =>
+              {
+                setCheckState("idle");
+                setState((current) => ({
+                  ...current,
+                  mode: "join",
+                  localPath: "",
+                  repositoryScenario: "existing_forge",
+                  environmentReady: false,
+                }));
+              }
+            }
+          >
+            <Search size={14} /> Join existing project
+          </button>
+        </div>
+
+        {!hasRepoSelection && (
+          <div className="setup-empty-state">
+            <Folder size={18} />
+            <strong>Select a repository to start simulated checks.</strong>
+            <span>
+              {state.mode === "join"
+                ? "Paste a repository URL below."
+                : "Choose one of the mocked local repositories below."}
+            </span>
+          </div>
+        )}
+
+        {state.mode === "initialize" ? (
+          <label className="setup-field">
+            <span>Mocked local repository</span>
+            <div className="folder-picker">
+              <Folder size={16} />
+              <select
+                value={state.localPath}
+                onChange={(event) =>
+                  {
+                    setCheckState("idle");
+                    setState((current) => ({
+                      ...current,
+                      localPath: event.target.value,
+                      repositoryScenario: "new_forge",
+                      environmentReady: false,
+                    }));
+                  }
+                }
+              >
+                <option value="">Select mocked repository</option>
+                {repositoryOptions.map((path) => (
+                  <option key={path} value={path}>{path}</option>
+                ))}
+              </select>
+              <button type="button" onClick={() => runCheck()} disabled={!state.localPath}>Refresh</button>
+            </div>
+          </label>
+        ) : (
+          <label className="setup-field">
+            <span>Repository URL</span>
+            <input
+              value={state.repositoryUrl}
+              placeholder="https://github.com/org/repo"
+              onChange={(event) =>
+                {
+                  setCheckState("idle");
+                  setState((current) => ({
+                    ...current,
+                    repositoryUrl: event.target.value,
+                    repositoryScenario: "existing_forge",
+                    environmentReady: false,
+                  }));
+                }
+              }
+            />
+          </label>
+        )}
+      </SetupSection>
+      {hasRepoSelection && <SetupSection title="Environment + repository check" description="Prototype simulation only. No commands are executed.">
         <div className={`environment-card ${state.environmentReady ? "ready" : "warning"}`}>
           <div className="environment-heading">
-            <span>{state.environmentReady ? <CheckCircle2 size={20} /> : <TriangleAlert size={20} />}</span>
+            <span>
+              {checkState === "checking" ? <LoaderCircle size={20} /> : state.environmentReady ? <CheckCircle2 size={20} /> : <TriangleAlert size={20} />}
+            </span>
             <div>
-              <strong>{state.environmentReady ? "Environment is ready" : "Coding agent prerequisite not detected"}</strong>
-              <p>{state.environmentReady ? "Nia can configure and run local project workflows." : "You can continue, but setup guidance should be reviewed before running workflows."}</p>
+              <strong>
+                {checkState === "checking"
+                  ? "Running simulated checks..."
+                  : state.environmentReady
+                    ? "Environment and repository are ready"
+                    : "Checks need attention"}
+              </strong>
+              <p>
+                {checkState === "checking"
+                  ? "Validating repository and prerequisites."
+                  : checkState === "idle"
+                    ? "Select a repository source first, then run check."
+                    : state.environmentReady
+                      ? "Forge can continue for the selected setup path."
+                      : "Continue is blocked until checks pass."}
+              </p>
             </div>
           </div>
           <div className="check-grid">
-            <CheckItem label="Nia installed" ok />
-            <CheckItem label="Local Git support" ok />
-            <CheckItem label="GitHub CLI available" ok />
-            <CheckItem label="Node.js available" ok={state.environmentReady} />
+            <CheckItem label="Forge extension installed" ok={checkState === "done"} />
+            <CheckItem label="Local Git support" ok={checkState === "done"} />
+            <CheckItem label="Repository is valid" ok={checkState === "done" && state.repositoryScenario !== "not_repo"} />
+            <CheckItem label="Forge config detected" ok={checkState === "done" && state.repositoryScenario === "existing_forge"} />
           </div>
-          <div className="setup-inline-actions">
-            {!state.environmentReady && <button className="setup-link-button" onClick={onGuidance}><HelpCircle size={14} /> View setup guidance</button>}
-            <button className="setup-link-button" onClick={() => setState((current) => ({ ...current, environmentReady: true }))}><RefreshCcw size={14} /> Run check again</button>
-            {state.environmentReady && <button className="setup-demo-link" onClick={() => setState((current) => ({ ...current, environmentReady: false }))}>Show missing prerequisite</button>}
+          <div className="detected-panel compact">
+            <span className="detected-title"><Search size={14} /> Detected</span>
+            <span className="muted" style={{ gridColumn: "1 / -1", fontSize: 11 }}>{checkState === "done" ? scenarioLabel : "No detection yet."}</span>
+          </div>
+          <div className="setup-inline-actions compact-links">
+            <span className="muted">Simulated detection result:</span>
+            <button className="setup-demo-link" onClick={() => runCheck("new_forge")}>No Forge project</button>
+            <button className="setup-demo-link" onClick={() => runCheck("existing_forge")}>Existing Forge project</button>
+            <button className="setup-demo-link" onClick={() => runCheck("not_repo")}>Invalid repository</button>
           </div>
         </div>
-      </SetupSection>
-      <SetupSection title="Project setup mode">
-        <div className="setup-choice-grid two">
-          <ChoiceCard selected={state.mode === "new"} icon={Folder} title="Use a local repository" description="Select a repository already cloned on this machine." onClick={() => setMode("new")} />
-          <ChoiceCard selected={state.mode === "import"} icon={Import} title="Import existing Nia configuration" description="Use a repository that already contains .nia/config." onClick={() => setMode("import")} />
-        </div>
-      </SetupSection>
-      <SetupSection title="Project folder">
-        <label className="setup-field">
-          <span>Local repository</span>
-          <div className="folder-picker">
-            <Folder size={16} />
-            <select value={state.localPath} onChange={(event) => setState((current) => ({ ...current, localPath: event.target.value, repositoryDetected: true }))}>
-              {repositoryOptions.map((path) => <option key={path}>{path}</option>)}
-            </select>
-            <button>Browse</button>
-          </div>
-        </label>
-        <div className="detected-panel">
-          <span className="detected-title"><Search size={14} /> Detected</span>
-          <CheckItem label="Git repository" ok />
-          <CheckItem label={`Repository name: ${state.localPath.split("/").pop()}`} ok />
-          <CheckItem label="Remote: GitHub" ok />
-          {state.mode === "import" && <>
-            <div className="detected-divider" />
-            <CheckItem label=".nia/config/agents.toml" ok />
-            <CheckItem label=".nia/config/project.toml" ok />
-            <CheckItem label=".nia/config/toolchain.toml" ok />
-          </>}
-        </div>
-      </SetupSection>
-      {footer}
-    </>
-  );
-}
-
-function CodePlatformStep({
-  state,
-  setState,
-  footer,
-}: {
-  state: SetupState;
-  setState: React.Dispatch<React.SetStateAction<SetupState>>;
-  footer: ReactNode;
-}) {
-  const select = (codePlatform: CodePlatform) =>
-    setState((current) => ({
-      ...current,
-      codePlatform,
-      codePlatformStatus: codePlatform === "github" ? "connected" : codePlatform === "local" ? "connected" : "not_checked",
-    }));
-  return (
-    <>
-      <StepHeader eyebrow="Step 2 of 7" title="Where is your source code hosted?" description="The local repository and its external code platform are configured independently." />
-      <div className="setup-choice-grid four">
-        <ChoiceCard selected={state.codePlatform === "github"} icon={Github} title="GitHub" description="Connect a GitHub repository." onClick={() => select("github")} />
-        <ChoiceCard selected={state.codePlatform === "bitbucket"} icon={Code2} title="Bitbucket" description="Connect a Bitbucket workspace." onClick={() => select("bitbucket")} />
-        <ChoiceCard selected={state.codePlatform === "local"} icon={HardDrive} title="Local only" description="Use the selected local repository." onClick={() => select("local")} />
-        <ChoiceCard selected={state.codePlatform === "other"} icon={Cloud} title="Other" description="Continue without a connection." onClick={() => select("other")} />
-      </div>
-      <ConnectionPanel
-        title={platformLabels[state.codePlatform]}
-        icon={state.codePlatform === "github" ? Github : state.codePlatform === "local" ? HardDrive : Code2}
-        status={state.codePlatformStatus}
-        connectedText={state.codePlatform === "github" ? "Connected as Stefan" : state.codePlatform === "local" ? "Local repository available" : "Connection available"}
-        details={state.codePlatform === "github" ? "telerik/healthcare-app-angular" : state.codePlatform === "local" ? state.localPath : "Representative connection settings"}
-        onStatus={(status) => setState((current) => ({ ...current, codePlatformStatus: status }))}
-      />
-      {footer}
-    </>
-  );
-}
-
-function IssueTrackerStep({
-  state,
-  setState,
-  footer,
-}: {
-  state: SetupState;
-  setState: React.Dispatch<React.SetStateAction<SetupState>>;
-  footer: ReactNode;
-}) {
-  const options: Array<{ value: IssueTracker; icon: LucideIcon; description: string }> = [
-    { value: "github_issues", icon: Github, description: "Use issues from the connected repository." },
-    { value: "jira", icon: Settings2, description: "Connect a Jira site and project." },
-    { value: "azure_devops", icon: Cloud, description: "Connect an Azure DevOps project." },
-    { value: "shortcut", icon: Sparkles, description: "Connect a Shortcut workspace." },
-    { value: "local", icon: HardDrive, description: "Use local issue context only." },
-    { value: "other", icon: Package, description: "Explore another integration." },
-  ];
-  const select = (issueTracker: IssueTracker) =>
-    setState((current) => ({
-      ...current,
-      issueTracker,
-      issueTrackerStatus: ["github_issues", "local"].includes(issueTracker) ? "connected" : "not_checked",
-    }));
-  return (
-    <>
-      <StepHeader eyebrow="Step 3 of 7" title="Choose an issue tracker" description="Nia uses issue context to understand and start project work." />
-      <div className="setup-choice-grid three compact">
-        {options.map((option) => <ChoiceCard key={option.value} selected={state.issueTracker === option.value} icon={option.icon} title={trackerLabels[option.value]} description={option.description} onClick={() => select(option.value)} />)}
-      </div>
-      {state.issueTracker === "jira" ? (
-        <div className="connection-detail-card">
-          <div className="connection-detail-heading"><Settings2 size={19} /><div><strong>Jira</strong><p>Representative fields only. No external connection is made.</p></div></div>
-          <div className="setup-form-grid"><label className="setup-field"><span>Site URL</span><input defaultValue="https://example.atlassian.net" /></label><label className="setup-field"><span>Project key</span><input defaultValue="NIA" /></label></div>
-          <ConnectionStatusLine status={state.issueTrackerStatus} connectedText="Connected to NIA" />
-          <StatusControls status={state.issueTrackerStatus} onStatus={(status) => setState((current) => ({ ...current, issueTrackerStatus: status }))} />
-        </div>
-      ) : (
-        <ConnectionPanel
-          title={trackerLabels[state.issueTracker]}
-          icon={state.issueTracker === "github_issues" ? Github : state.issueTracker === "local" ? HardDrive : Settings2}
-          status={state.issueTrackerStatus}
-          connectedText={state.issueTracker === "github_issues" ? "Issues available" : state.issueTracker === "local" ? "Local issue context ready" : "Integration connected"}
-          details={state.issueTracker === "github_issues" ? "telerik/healthcare-app-angular" : "Issue tracker connection"}
-          onStatus={(status) => setState((current) => ({ ...current, issueTrackerStatus: status }))}
-        />
-      )}
+      </SetupSection>}
       {footer}
     </>
   );
@@ -635,37 +628,131 @@ function CodingAgentStep({
     claude_code: "Terminal-oriented agent for codebase implementation.",
     opencode: "Open-source coding agent with local execution.",
   };
+
+  const profiles: Array<{
+    value: ModelProfile;
+    subtitle: string;
+    description: string;
+    tag?: string;
+  }> = [
+    {
+      value: "stable",
+      subtitle: "Default profile",
+      description: "Reliable capability for day-to-day project workflows.",
+      tag: "Recommended",
+    },
+    {
+      value: "balanced",
+      subtitle: "Balanced capability and usage",
+      description: "A flexible profile for broader workflow experimentation.",
+    },
+    {
+      value: "lite",
+      subtitle: "Lower-cost experimentation",
+      description: "Fast, lightweight behavior for early exploration.",
+    },
+  ];
+
   return (
     <>
-      <StepHeader eyebrow="Step 4 of 7" title="Select a coding agent" description="Choose the agent Nia will use when workflows reach implementation steps." />
+      <StepHeader
+        eyebrow="Step 2 of 6"
+        title="Coding agent"
+        description="Select an agent and profile. This is global readiness + project preference in one simulated step."
+      />
       <div className="agent-grid">
         {(Object.keys(agentLabels) as CodingAgent[]).map((agent) => {
           const agentState = state.agentStates[agent];
           return (
-            <button key={agent} className={`agent-card ${state.codingAgent === agent ? "selected" : ""}`} onClick={() => setState((current) => ({ ...current, codingAgent: agent }))}>
-              <div className="agent-card-heading"><span><Bot size={20} /></span>{state.codingAgent === agent && <CheckCircle2 size={17} />}</div>
+            <button
+              key={agent}
+              className={`agent-card ${state.codingAgent === agent ? "selected" : ""}`}
+              onClick={() => setState((current) => ({ ...current, codingAgent: agent }))}
+            >
+              <div className="agent-card-heading">
+                <span><Bot size={20} /></span>
+                {state.codingAgent === agent && <CheckCircle2 size={17} />}
+              </div>
               <strong>{agentLabels[agent]}</strong>
               <p>{descriptions[agent]}</p>
               <div className="agent-statuses">
-                <span className={agentState.installed ? "ok" : "warn"}>{agentState.installed ? <Check size={12} /> : <AlertCircle size={12} />}{agentState.installed ? "Installed" : "Not detected"}</span>
-                <span className={agentState.authenticated ? "ok" : "warn"}>{agentState.authenticated ? <Check size={12} /> : <AlertCircle size={12} />}{agentState.authenticated ? "Authenticated" : "Authentication required"}</span>
+                <span className={agentState.installed ? "ok" : "warn"}>
+                  {agentState.installed ? <Check size={12} /> : <AlertCircle size={12} />}
+                  {agentState.installed ? "Installed" : "Not detected"}
+                </span>
+                <span className={agentState.authenticated ? "ok" : "warn"}>
+                  {agentState.authenticated ? <Check size={12} /> : <AlertCircle size={12} />}
+                  {agentState.authenticated ? "Authenticated" : "Authentication required"}
+                </span>
               </div>
             </button>
           );
         })}
       </div>
-      {(!state.agentStates[state.codingAgent].installed || !state.agentStates[state.codingAgent].authenticated) && (
+      {(!state.agentStates[state.codingAgent].installed ||
+        !state.agentStates[state.codingAgent].authenticated) && (
         <div className="setup-warning-card">
           <TriangleAlert size={19} />
-          <div><strong>Agent setup needs attention</strong><p>Authentication or installation must be completed before workflows can run.</p><div className="setup-inline-actions"><button className="setup-link-button" onClick={() => onGuidance(state.codingAgent)}><HelpCircle size={14} /> View setup guidance</button><button className="setup-link-button" onClick={() => setState((current) => ({ ...current, agentStates: { ...current.agentStates, [current.codingAgent]: { installed: true, authenticated: true } } }))}><RefreshCcw size={14} /> Check again</button></div></div>
+          <div>
+            <strong>Agent setup needs attention</strong>
+            <p>Authentication or installation must be completed before workflows can run.</p>
+            <div className="setup-inline-actions">
+              <button className="setup-link-button" onClick={() => onGuidance(state.codingAgent)}>
+                <HelpCircle size={14} /> View setup guidance
+              </button>
+              <button
+                className="setup-link-button"
+                onClick={() =>
+                  setState((current) => ({
+                    ...current,
+                    agentStates: {
+                      ...current.agentStates,
+                      [current.codingAgent]: { installed: true, authenticated: true },
+                    },
+                  }))
+                }
+              >
+                <RefreshCcw size={14} /> Mark ready
+              </button>
+            </div>
+          </div>
         </div>
       )}
+      <div className="setup-step-gap" />
+      <SetupSection
+        title="Model profile"
+        description="Compact profile cards to keep this step lightweight in the demo."
+      >
+        <div className="profile-grid">
+          {profiles.map((profile) => (
+            <button
+              key={profile.value}
+              className={`profile-card ${state.modelProfile === profile.value ? "selected" : ""}`}
+              onClick={() => setState((current) => ({ ...current, modelProfile: profile.value }))}
+            >
+              {state.modelProfile === profile.value ? (
+                <CheckCircle2 className="profile-check" size={18} />
+              ) : (
+                <Circle className="profile-check muted-check" size={18} />
+              )}
+              <div>
+                <span className="profile-title">
+                  <strong>{modelLabels[profile.value]}</strong>
+                  {profile.tag && <small>{profile.tag}</small>}
+                </span>
+                <b>{profile.subtitle}</b>
+                <p>{profile.description}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </SetupSection>
       {footer}
     </>
   );
 }
 
-function ModelProfileStep({
+function CodePlatformStep({
   state,
   setState,
   footer,
@@ -674,18 +761,138 @@ function ModelProfileStep({
   setState: React.Dispatch<React.SetStateAction<SetupState>>;
   footer: ReactNode;
 }) {
-  const profiles: Array<{ value: ModelProfile; icon: LucideIcon; subtitle: string; description: string; tag?: string }> = [
-    { value: "stable", icon: ShieldCheck, subtitle: "Default profile", description: "Reliable capability for day-to-day project workflows.", tag: "Recommended" },
-    { value: "balanced", icon: Sparkles, subtitle: "Balanced capability and usage", description: "A flexible profile for broader workflow experimentation." },
-    { value: "lite", icon: WandSparkles, subtitle: "Lower-cost experimentation", description: "Fast, lightweight behavior for early exploration." },
-  ];
+  const select = (codePlatform: CodePlatform) =>
+    setState((current) => ({
+      ...current,
+      codePlatform,
+      codePlatformStatus: codePlatform === "github" ? "connected" : "not_checked",
+    }));
+
   return (
     <>
-      <StepHeader eyebrow="Step 5 of 7" title="Choose a model profile" description="Select a simple project-level profile. Detailed model configuration can happen later." />
-      <div className="profile-grid">
-        {profiles.map((profile) => <button key={profile.value} className={`profile-card ${state.modelProfile === profile.value ? "selected" : ""}`} onClick={() => setState((current) => ({ ...current, modelProfile: profile.value }))}><div className="profile-card-icon"><profile.icon size={20} /></div><div><span className="profile-title"><strong>{modelLabels[profile.value]}</strong>{profile.tag && <small>{profile.tag}</small>}</span><b>{profile.subtitle}</b><p>{profile.description}</p></div>{state.modelProfile === profile.value ? <CheckCircle2 className="profile-check" size={18} /> : <Circle className="profile-check muted-check" size={18} />}</button>)}
+      <StepHeader
+        eyebrow="Step 3 of 6"
+        title="Code platform"
+        description="Choose the source platform. All connection states are simulated for demo control."
+      />
+      <div className="setup-choice-grid four">
+        <ChoiceCard
+          selected={state.codePlatform === "github"}
+          icon={Github}
+          title="GitHub"
+          description="Connect a GitHub repository."
+          onClick={() => select("github")}
+        />
+        <ChoiceCard
+          selected={state.codePlatform === "bitbucket"}
+          icon={Code2}
+          title="Bitbucket"
+          description="Connect a Bitbucket workspace."
+          onClick={() => select("bitbucket")}
+        />
+        <ChoiceCard
+          selected={state.codePlatform === "gitlab"}
+          icon={Package}
+          title="GitLab"
+          description="Connect a GitLab project."
+          onClick={() => select("gitlab")}
+        />
+        <ChoiceCard
+          selected={state.codePlatform === "other"}
+          icon={Cloud}
+          title="Other"
+          description="Continue without a direct connection."
+          onClick={() => select("other")}
+        />
       </div>
-      <div className="profile-note"><Sparkles size={17} /><div><strong>Profiles keep setup simple</strong><p>Nia will use the selected profile as a preference rather than exposing individual models during onboarding.</p></div></div>
+      <ConnectionPanel
+        title={platformLabels[state.codePlatform]}
+        icon={state.codePlatform === "github" ? Github : state.codePlatform === "other" ? Cloud : Code2}
+        status={state.codePlatformStatus}
+        connectedText={state.codePlatform === "github" ? "Connected as Stefan" : "Connection available"}
+        details={
+          state.codePlatform === "github"
+            ? "progress-forge-control-center"
+            : "Representative connection settings"
+        }
+        onStatus={(status) => setState((current) => ({ ...current, codePlatformStatus: status }))}
+      />
+      {footer}
+    </>
+  );
+}
+
+function IssueTrackerStep({
+  state,
+  setState,
+  footer,
+}: {
+  state: SetupState;
+  setState: React.Dispatch<React.SetStateAction<SetupState>>;
+  footer: ReactNode;
+}) {
+  const options: Array<{ value: IssueTracker; icon: LucideIcon; description: string }> = [
+    { value: "github_issues", icon: Github, description: "Use issues from the connected repository." },
+    { value: "jira", icon: Settings2, description: "Connect a Jira site and project." },
+    { value: "azure_devops", icon: Cloud, description: "Connect an Azure DevOps project." },
+    { value: "other", icon: Package, description: "Explore another integration." },
+  ];
+
+  const select = (issueTracker: IssueTracker) =>
+    setState((current) => ({
+      ...current,
+      issueTracker,
+      issueTrackerStatus: issueTracker === "github_issues" ? "connected" : "not_checked",
+    }));
+
+  return (
+    <>
+      <StepHeader
+        eyebrow="Step 4 of 6"
+        title="Issue tracker"
+        description="Pick tracker integration and simulate connection results."
+      />
+      <div className="setup-choice-grid four compact">
+        {options.map((option) => (
+          <ChoiceCard
+            key={option.value}
+            selected={state.issueTracker === option.value}
+            icon={option.icon}
+            title={trackerLabels[option.value]}
+            description={option.description}
+            onClick={() => select(option.value)}
+          />
+        ))}
+      </div>
+      {state.issueTracker === "jira" ? (
+        <div className="connection-detail-card">
+          <div className="connection-detail-heading">
+            <Settings2 size={19} />
+            <div>
+              <strong>Jira</strong>
+              <p>Representative fields only. No external connection is made.</p>
+            </div>
+          </div>
+          <div className="setup-form-grid">
+            <label className="setup-field"><span>Site URL</span><input defaultValue="https://example.atlassian.net" /></label>
+            <label className="setup-field"><span>Project key</span><input defaultValue="FORGE" /></label>
+          </div>
+          <ConnectionStatusLine status={state.issueTrackerStatus} connectedText="Connected to FORGE" />
+          <StatusControls
+            status={state.issueTrackerStatus}
+            onStatus={(status) => setState((current) => ({ ...current, issueTrackerStatus: status }))}
+          />
+        </div>
+      ) : (
+        <ConnectionPanel
+          title={trackerLabels[state.issueTracker]}
+          icon={state.issueTracker === "github_issues" ? Github : Settings2}
+          status={state.issueTrackerStatus}
+          connectedText={state.issueTracker === "github_issues" ? "Issues available" : "Integration connected"}
+          details={state.issueTracker === "github_issues" ? "progress-forge-control-center" : "Issue tracker connection"}
+          onStatus={(status) => setState((current) => ({ ...current, issueTrackerStatus: status }))}
+        />
+      )}
       {footer}
     </>
   );
@@ -702,17 +909,69 @@ function ProjectDetailsStep({
 }) {
   const setMetadata = <K extends keyof ProjectMetadata>(key: K, value: ProjectMetadata[K]) =>
     setState((current) => ({ ...current, metadata: { ...current.metadata, [key]: value } }));
+
   return (
     <>
-      <StepHeader eyebrow="Step 6 of 7" title="Tell Nia about this project" description="Review the synthetic repository suggestions and edit the context Nia will provide to agents." />
-      <div className="suggestion-banner"><Search size={16} /><div><strong>Suggested from repository</strong><p>These values are mock detections for the visual prototype and remain fully editable.</p></div></div>
+      <StepHeader
+        eyebrow="Step 5 of 6"
+        title="Project details"
+        description="All fields are text inputs in this prototype to emphasize editable setup data."
+      />
+      <div className="suggestion-banner">
+        <Search size={16} />
+        <div>
+          <strong>Suggested from repository</strong>
+          <p>These values are simulated suggestions and remain fully editable.</p>
+        </div>
+      </div>
       <div className="metadata-form">
-        <label className="setup-field"><span>Project name *</span><input value={state.metadata.name} onChange={(event) => setMetadata("name", event.target.value)} />{!state.metadata.name.trim() && <small className="field-error">Project name is required.</small>}</label>
-        <label className="setup-field full"><span>Description *</span><textarea rows={3} value={state.metadata.description} onChange={(event) => setMetadata("description", event.target.value)} />{!state.metadata.description.trim() && <small className="field-error">Description is required.</small>}</label>
-        <label className="setup-field"><span>Primary language *</span><select value={state.metadata.language} onChange={(event) => setMetadata("language", event.target.value)}><option>TypeScript</option><option>JavaScript</option><option>C#</option><option>Python</option><option>Go</option></select></label>
-        <label className="setup-field"><span>Frameworks *</span><input value={state.metadata.frameworks.join(", ")} onChange={(event) => setMetadata("frameworks", event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} /></label>
-        <label className="setup-field"><span>Testing framework *</span><input value={state.metadata.testingFramework} onChange={(event) => setMetadata("testingFramework", event.target.value)} /></label>
-        <label className="setup-field"><span>Package manager *</span><select value={state.metadata.packageManager} onChange={(event) => setMetadata("packageManager", event.target.value)}><option>npm</option><option>pnpm</option><option>yarn</option><option>NuGet</option><option>pip</option></select></label>
+        <label className="setup-field">
+          <span>Project name *</span>
+          <input value={state.metadata.name} onChange={(event) => setMetadata("name", event.target.value)} />
+          {!state.metadata.name.trim() && <small className="field-error">Project name is required.</small>}
+        </label>
+        <label className="setup-field full">
+          <span>Description *</span>
+          <textarea
+            rows={3}
+            value={state.metadata.description}
+            onChange={(event) => setMetadata("description", event.target.value)}
+          />
+          {!state.metadata.description.trim() && <small className="field-error">Description is required.</small>}
+        </label>
+        <label className="setup-field">
+          <span>Primary language *</span>
+          <input value={state.metadata.language} onChange={(event) => setMetadata("language", event.target.value)} />
+        </label>
+        <label className="setup-field">
+          <span>Frameworks *</span>
+          <input
+            value={state.metadata.frameworks.join(", ")}
+            onChange={(event) =>
+              setMetadata(
+                "frameworks",
+                event.target.value
+                  .split(",")
+                  .map((item) => item.trim())
+                  .filter(Boolean),
+              )
+            }
+          />
+        </label>
+        <label className="setup-field">
+          <span>Testing framework *</span>
+          <input
+            value={state.metadata.testingFramework}
+            onChange={(event) => setMetadata("testingFramework", event.target.value)}
+          />
+        </label>
+        <label className="setup-field">
+          <span>Package manager *</span>
+          <input
+            value={state.metadata.packageManager}
+            onChange={(event) => setMetadata("packageManager", event.target.value)}
+          />
+        </label>
       </div>
       {footer}
     </>
@@ -723,69 +982,183 @@ function ReviewStep({
   state,
   setState,
   returnTo,
+  onBack,
+  onCancel,
   onValidated,
-  footer,
 }: {
   state: SetupState;
   setState: React.Dispatch<React.SetStateAction<SetupState>>;
   returnTo?: string;
   onValidated: (project: Project) => void;
-  footer: ReactNode;
+  onBack: () => void;
+  onCancel: () => void;
 }) {
   const navigate = useNavigate();
   const [simulateFailure, setSimulateFailure] = useState(false);
   const [validationIndex, setValidationIndex] = useState(0);
-  const validationSteps = ["Validating repository", "Validating integrations", "Validating coding agent", "Validating project metadata"];
+  const validationSteps = [
+    "Validating project scenario",
+    "Validating integrations",
+    "Validating coding agent",
+    "Validating project metadata",
+  ];
+
   useEffect(() => {
     if (state.validationStatus !== "validating") return;
+    let currentIndex = 0;
+    setValidationIndex(0);
+
     const interval = window.setInterval(() => {
-      setValidationIndex((index) => {
-        if (index < validationSteps.length - 1) return index + 1;
-        window.clearInterval(interval);
-        if (simulateFailure) {
-          setState((current) => ({ ...current, validationStatus: "invalid", validationMessage: "GitHub Issues connection could not be validated." }));
-        } else {
-          setState((current) => ({ ...current, validationStatus: "valid", validationMessage: undefined }));
-          window.setTimeout(() => onValidated(toProject(state)), 350);
-        }
-        return index;
-      });
+      if (currentIndex < validationSteps.length - 1) {
+        currentIndex += 1;
+        setValidationIndex(currentIndex);
+        return;
+      }
+
+      window.clearInterval(interval);
+      if (simulateFailure) {
+        setState((current) => ({
+          ...current,
+          validationStatus: "invalid",
+          validationMessage: "Issue tracker connection could not be validated.",
+        }));
+        return;
+      }
+
+      setState((current) => ({ ...current, validationStatus: "valid", validationMessage: undefined }));
+      window.setTimeout(() => onValidated(toProject(state)), 350);
     }, 650);
+
     return () => window.clearInterval(interval);
   }, [onValidated, setState, simulateFailure, state, state.validationStatus, validationSteps.length]);
 
   const edit = (path: string) => navigate(withReturn(`/setup/${path}`, returnTo));
   const rows = [
-    { title: "Project", value: state.metadata.name, detail: state.localPath, path: "project" },
-    { title: "Code platform", value: platformLabels[state.codePlatform], detail: state.codePlatform === "github" ? "telerik/healthcare-app-angular · Connected" : connectionLabel(state.codePlatformStatus), path: "code-platform" },
-    { title: "Issue tracker", value: trackerLabels[state.issueTracker], detail: connectionLabel(state.issueTrackerStatus), path: "issue-tracker" },
-    { title: "Coding agent", value: agentLabels[state.codingAgent], detail: state.agentStates[state.codingAgent].authenticated ? "Installed · Authenticated" : "Setup required", path: "coding-agent" },
-    { title: "Model profile", value: modelLabels[state.modelProfile], detail: "Project execution preference", path: "model-profile" },
-    { title: "Project details", value: `${state.metadata.language} · ${state.metadata.frameworks.join(", ")}`, detail: `${state.metadata.testingFramework} · ${state.metadata.packageManager}`, path: "project-details" },
+    {
+      title: "Project",
+      value: state.mode === "join" ? "Join existing project" : "Initialize project",
+      detail: `${state.localPath} · ${state.repositoryScenario === "existing_forge" ? "existing Forge" : state.repositoryScenario === "new_forge" ? "new Forge" : "invalid"}`,
+      path: "project",
+    },
+    {
+      title: "Coding agent",
+      value: `${agentLabels[state.codingAgent]} · ${modelLabels[state.modelProfile]}`,
+      detail: state.agentStates[state.codingAgent].authenticated ? "Installed and authenticated" : "Setup required",
+      path: "coding-agent",
+    },
+    {
+      title: "Code platform",
+      value: platformLabels[state.codePlatform],
+      detail: connectionLabel(state.codePlatformStatus),
+      path: "code-platform",
+    },
+    {
+      title: "Issue tracker",
+      value: trackerLabels[state.issueTracker],
+      detail: connectionLabel(state.issueTrackerStatus),
+      path: "issue-tracker",
+    },
+    {
+      title: "Project details",
+      value: `${state.metadata.language} · ${state.metadata.frameworks.join(", ")}`,
+      detail: `${state.metadata.testingFramework} · ${state.metadata.packageManager}`,
+      path: "project-details",
+    },
   ];
+
   return (
     <>
-      <StepHeader eyebrow="Step 7 of 7" title="Review project setup" description="Confirm every setup decision before Nia validates and adds the project." />
+      <StepHeader
+        eyebrow="Step 6 of 6"
+        title="Review setup"
+        description="Confirm all simulated decisions before adding the project to Forge."
+      />
       <div className="review-layout">
         <div className="review-card">
-          {rows.map((row) => <div className="review-row" key={row.title}><span className="review-row-icon"><ReviewIcon title={row.title} /></span><div><small>{row.title}</small><strong>{row.value}</strong><p>{row.detail}</p></div><button onClick={() => edit(row.path)}>Edit</button></div>)}
+          {rows.map((row) => (
+            <div className="review-row" key={row.title}>
+              <span className="review-row-icon"><ReviewIcon title={row.title} /></span>
+              <div>
+                <small>{row.title}</small>
+                <strong>{row.value}</strong>
+                <p>{row.detail}</p>
+              </div>
+              <button onClick={() => edit(row.path)}>Edit</button>
+            </div>
+          ))}
         </div>
         <aside className="config-preview-card">
           <FileCode2 size={20} />
           <h3>Conceptual configuration</h3>
-          <p>Nia would represent this setup across project configuration files.</p>
-          <code>.nia/config/agents.toml</code>
-          <code>.nia/config/project.toml</code>
-          <code>.nia/config/toolchain.toml</code>
+          <p>Forge would represent this setup across project configuration files.</p>
+          <code>.forge/config/agents.toml</code>
+          <code>.forge/config/project.toml</code>
+          <code>.forge/config/toolchain.toml</code>
           <button><FileText size={14} /> Preview configuration</button>
         </aside>
       </div>
-      {state.validationStatus === "invalid" && <div className="validation-error"><XCircle size={20} /><div><strong>Setup needs attention</strong><p>{state.validationMessage}</p><div className="setup-inline-actions"><button className="setup-link-button" onClick={() => edit("issue-tracker")}>Back to Issue tracker</button><button className="setup-link-button" onClick={() => { setValidationIndex(0); setState((current) => ({ ...current, validationStatus: "validating" })); }}>Try again</button></div></div></div>}
-      {state.validationStatus === "validating" && <div className="validation-progress"><LoaderCircle size={22} /><div><strong>Validating project setup…</strong><p>{validationSteps[validationIndex]}…</p><div className="validation-track"><span style={{ width: `${((validationIndex + 1) / validationSteps.length) * 100}%` }} /></div></div></div>}
-      <label className="setup-demo-toggle"><input type="checkbox" checked={simulateFailure} onChange={(event) => setSimulateFailure(event.target.checked)} /><span>Prototype control: simulate validation failure</span></label>
+      {state.validationStatus === "invalid" && (
+        <div className="validation-error">
+          <XCircle size={20} />
+          <div>
+            <strong>Setup needs attention</strong>
+            <p>{state.validationMessage}</p>
+            <div className="setup-inline-actions">
+              <button className="setup-link-button" onClick={() => edit("issue-tracker")}>Back to issue tracker</button>
+              <button
+                className="setup-link-button"
+                onClick={() => {
+                  setValidationIndex(0);
+                  setState((current) => ({ ...current, validationStatus: "validating" }));
+                }}
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {state.validationStatus === "validating" && (
+        <div className="validation-progress">
+          <LoaderCircle size={22} />
+          <div>
+            <strong>Validating project setup...</strong>
+            <p>{validationSteps[validationIndex]}...</p>
+            <div className="validation-track">
+              <span style={{ width: `${((validationIndex + 1) / validationSteps.length) * 100}%` }} />
+            </div>
+          </div>
+        </div>
+      )}
+      <label className="setup-demo-toggle">
+        <input
+          type="checkbox"
+          checked={simulateFailure}
+          onChange={(event) => setSimulateFailure(event.target.checked)}
+        />
+        <span>Prototype control: simulate validation failure</span>
+      </label>
       <div className="setup-review-footer">
-        {footer}
-        <button className="setup-button primary" disabled={state.validationStatus === "validating"} onClick={() => { setValidationIndex(0); setState((current) => ({ ...current, validationStatus: "validating", validationMessage: undefined })); }}><ShieldCheck size={16} /> Validate and add project</button>
+        <button className="setup-button ghost" onClick={onCancel}>Cancel</button>
+        <div>
+          <button className="setup-button secondary" onClick={onBack}>
+            <ArrowLeft size={15} /> Back
+          </button>
+          <button
+            className="setup-button primary"
+            disabled={state.validationStatus === "validating"}
+            onClick={() => {
+              setValidationIndex(0);
+              setState((current) => ({
+                ...current,
+                validationStatus: "validating",
+                validationMessage: undefined,
+              }));
+            }}
+          >
+            <ShieldCheck size={16} /> Validate and add project
+          </button>
+        </div>
       </div>
     </>
   );
@@ -797,7 +1170,7 @@ function CompletePage({ project, onOpen, onReview }: { project: Project; onOpen:
       <div className="complete-mark"><Check size={31} /></div>
       <span className="setup-eyebrow">Setup complete</span>
       <h1>Your project is ready</h1>
-      <p><strong>{project.name}</strong> has been configured and is ready to open in Nia.</p>
+      <p><strong>{project.name}</strong> has been configured and is ready to open in Forge.</p>
       <div className="complete-checks">
         <CheckItem label="Repository configured" ok />
         <CheckItem label="Issue tracker configured" ok />
@@ -811,36 +1184,140 @@ function CompletePage({ project, onOpen, onReview }: { project: Project; onOpen:
 }
 
 function SetupSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
-  return <section className="setup-section"><div className="setup-section-heading"><h2>{title}</h2>{description && <p>{description}</p>}</div>{children}</section>;
+  return (
+    <section className="setup-section">
+      <div className="setup-section-heading">
+        <h2>{title}</h2>
+        {description && <p>{description}</p>}
+      </div>
+      {children}
+    </section>
+  );
 }
 
-function ChoiceCard({ selected, icon: Icon, title, description, onClick }: { selected: boolean; icon: LucideIcon; title: string; description: string; onClick: () => void }) {
-  return <button type="button" className={`setup-choice-card ${selected ? "selected" : ""}`} onClick={onClick}><span className="setup-choice-icon"><Icon size={20} /></span><div><strong>{title}</strong><p>{description}</p></div>{selected ? <CheckCircle2 className="setup-choice-check" size={17} /> : <Circle className="setup-choice-check empty" size={17} />}</button>;
+function ChoiceCard({
+  selected,
+  icon: Icon,
+  title,
+  description,
+  onClick,
+}: {
+  selected: boolean;
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className={`setup-choice-card ${selected ? "selected" : ""}`} onClick={onClick}>
+      <span className="setup-choice-icon"><Icon size={20} /></span>
+      <div>
+        <strong>{title}</strong>
+        <p>{description}</p>
+      </div>
+      {selected ? <CheckCircle2 className="setup-choice-check" size={17} /> : <Circle className="setup-choice-check empty" size={17} />}
+    </button>
+  );
 }
 
 function CheckItem({ label, ok }: { label: string; ok: boolean }) {
-  return <span className={`check-item ${ok ? "ok" : "warn"}`}>{ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}{label}</span>;
+  return (
+    <span className={`check-item ${ok ? "ok" : "warn"}`}>
+      {ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+      {label}
+    </span>
+  );
 }
 
-function SetupFooter({ onBack, onCancel, onContinue, continueLabel = "Continue", disabled, hideContinue = false }: { onBack?: () => void; onCancel: () => void; onContinue?: () => void; continueLabel?: string; disabled?: boolean; hideContinue?: boolean }) {
-  return <div className="setup-footer"><button className="setup-button ghost" onClick={onCancel}>Cancel</button><div>{onBack && <button className="setup-button secondary" onClick={onBack}><ArrowLeft size={15} /> Back</button>}{!hideContinue && <button className="setup-button primary" onClick={onContinue} disabled={disabled}>{continueLabel} <ArrowRight size={15} /></button>}</div></div>;
+function SetupFooter({
+  onBack,
+  onCancel,
+  onContinue,
+  continueLabel = "Continue",
+  disabled,
+  hideContinue = false,
+}: {
+  onBack?: () => void;
+  onCancel: () => void;
+  onContinue?: () => void;
+  continueLabel?: string;
+  disabled?: boolean;
+  hideContinue?: boolean;
+}) {
+  return (
+    <div className="setup-footer">
+      <button className="setup-button ghost" onClick={onCancel}>Cancel</button>
+      <div>
+        {onBack && (
+          <button className="setup-button secondary" onClick={onBack}>
+            <ArrowLeft size={15} /> Back
+          </button>
+        )}
+        {!hideContinue && (
+          <button className="setup-button primary" onClick={onContinue} disabled={disabled}>
+            {continueLabel} <ArrowRight size={15} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
-function ConnectionPanel({ title, icon: Icon, status, connectedText, details, onStatus }: { title: string; icon: LucideIcon; status: ConnectionStatus; connectedText: string; details: string; onStatus: (status: ConnectionStatus) => void }) {
-  return <div className="connection-detail-card"><div className="connection-detail-heading"><span><Icon size={20} /></span><div><strong>{title}</strong><p>{details}</p></div></div><ConnectionStatusLine status={status} connectedText={connectedText} /><StatusControls status={status} onStatus={onStatus} /></div>;
+function ConnectionPanel({
+  title,
+  icon: Icon,
+  status,
+  connectedText,
+  details,
+  onStatus,
+}: {
+  title: string;
+  icon: LucideIcon;
+  status: ConnectionStatus;
+  connectedText: string;
+  details: string;
+  onStatus: (status: ConnectionStatus) => void;
+}) {
+  return (
+    <div className="connection-detail-card">
+      <div className="connection-detail-heading">
+        <span><Icon size={20} /></span>
+        <div>
+          <strong>{title}</strong>
+          <p>{details}</p>
+        </div>
+      </div>
+      <ConnectionStatusLine status={status} connectedText={connectedText} />
+      <StatusControls status={status} onStatus={onStatus} />
+    </div>
+  );
 }
 
 function ConnectionStatusLine({ status, connectedText }: { status: ConnectionStatus; connectedText: string }) {
   const content: Record<ConnectionStatus, { icon: LucideIcon; text: string; tone: string }> = {
     not_checked: { icon: Circle, text: "Not connected", tone: "muted" },
-    checking: { icon: LoaderCircle, text: "Checking connection…", tone: "blue" },
+    checking: { icon: LoaderCircle, text: "Checking connection...", tone: "blue" },
     connected: { icon: CheckCircle2, text: connectedText, tone: "green" },
     needs_authentication: { icon: AlertCircle, text: "Authentication required", tone: "amber" },
     failed: { icon: XCircle, text: "Connection failed", tone: "red" },
   };
   const item = content[status];
   const Icon = item.icon;
-  return <div className={`connection-status-line ${item.tone}`}><Icon size={16} /><div><strong>{item.text}</strong><p>{status === "failed" ? "Check the representative connection settings and try again." : status === "needs_authentication" ? "Complete authentication before workflows can run." : "Mock connection state for this prototype."}</p></div></div>;
+  return (
+    <div className={`connection-status-line ${item.tone}`}>
+      <Icon size={16} />
+      <div>
+        <strong>{item.text}</strong>
+        <p>
+          {status === "failed"
+            ? "Check representative settings and try again."
+            : status === "needs_authentication"
+              ? "Complete authentication before workflows can run."
+              : "Mock connection state for this prototype."}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function StatusControls({ status, onStatus }: { status: ConnectionStatus; onStatus: (status: ConnectionStatus) => void }) {
@@ -848,36 +1325,106 @@ function StatusControls({ status, onStatus }: { status: ConnectionStatus; onStat
     onStatus("checking");
     window.setTimeout(() => onStatus("connected"), 650);
   };
-  return <div className="status-controls"><button className="setup-link-button" onClick={check}><RefreshCcw size={14} /> {status === "connected" ? "Test connection" : "Check again"}</button><span>Prototype states:</span><button className="setup-demo-link" onClick={() => onStatus("needs_authentication")}>Authentication required</button><button className="setup-demo-link" onClick={() => onStatus("failed")}>Failed</button></div>;
+
+  return (
+    <div className="status-controls">
+      <button className="setup-link-button" onClick={check}>
+        <RefreshCcw size={14} /> {status === "connected" ? "Test connection" : "Check again"}
+      </button>
+      <span>Prototype states:</span>
+      <button className="setup-demo-link" onClick={() => onStatus("needs_authentication")}>Authentication required</button>
+      <button className="setup-demo-link" onClick={() => onStatus("failed")}>Failed</button>
+    </div>
+  );
 }
 
 function GuidanceDrawer({ topic, onClose }: { topic: string; onClose: () => void }) {
   const label = topic === "environment" ? "Environment prerequisite" : agentLabels[topic as CodingAgent] ?? "Coding agent";
-  return <><div className="setup-drawer-scrim" onClick={onClose} /><aside className="setup-guidance-drawer"><div className="guidance-header"><div><span className="setup-eyebrow">Static guidance</span><h2>{label}</h2></div><button onClick={onClose}><X size={18} /></button></div><div className="guidance-body"><div className="guidance-icon"><HelpCircle size={24} /></div><h3>Complete setup outside this prototype</h3><p>This screen demonstrates where Nia would explain a missing prerequisite. It does not install software, run commands, or authenticate an account.</p><ol><li>Review the prerequisite documentation.</li><li>Complete installation or authentication in the supported tool.</li><li>Return to Nia and select <strong>Check again</strong>.</li></ol><a href="https://docs.github.com/en/copilot" target="_blank" rel="noreferrer">Open documentation <ExternalLink size={14} /></a></div></aside></>;
+  return (
+    <>
+      <div className="setup-drawer-scrim" onClick={onClose} />
+      <aside className="setup-guidance-drawer">
+        <div className="guidance-header">
+          <div>
+            <span className="setup-eyebrow">Static guidance</span>
+            <h2>{label}</h2>
+          </div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="guidance-body">
+          <div className="guidance-icon"><HelpCircle size={24} /></div>
+          <h3>Complete setup outside this prototype</h3>
+          <p>
+            This screen demonstrates where Forge would explain a missing prerequisite.
+            It does not install software, run commands, or authenticate an account.
+          </p>
+          <ol>
+            <li>Review the prerequisite documentation.</li>
+            <li>Complete installation or authentication in the supported tool.</li>
+            <li>Return to Forge and select <strong>Check again</strong>.</li>
+          </ol>
+          <a href="https://docs.github.com/en/copilot" target="_blank" rel="noreferrer">
+            Open documentation <ExternalLink size={14} />
+          </a>
+        </div>
+      </aside>
+    </>
+  );
 }
 
 function ReviewIcon({ title }: { title: string }) {
-  const icons: Record<string, LucideIcon> = { Project: Folder, "Code platform": Github, "Issue tracker": FileText, "Coding agent": Bot, "Model profile": Sparkles, "Project details": Settings2 };
+  const icons: Record<string, LucideIcon> = {
+    Project: Folder,
+    "Code platform": Github,
+    "Issue tracker": FileText,
+    "Coding agent": Bot,
+    "Project details": Settings2,
+  };
   const Icon = icons[title] ?? FileText;
   return <Icon size={17} />;
 }
 
 function connectionLabel(status: ConnectionStatus) {
-  return status === "connected" ? "Connected" : status === "needs_authentication" ? "Authentication required" : status === "failed" ? "Connection failed" : "Not connected";
+  return status === "connected"
+    ? "Connected"
+    : status === "needs_authentication"
+      ? "Authentication required"
+      : status === "failed"
+        ? "Connection failed"
+        : "Not connected";
 }
 
 function metadataValid(metadata: ProjectMetadata) {
-  return Boolean(metadata.name.trim() && metadata.description.trim() && metadata.language && metadata.frameworks.length && metadata.testingFramework.trim() && metadata.packageManager);
+  return Boolean(
+    metadata.name.trim() &&
+      metadata.description.trim() &&
+      metadata.language.trim() &&
+      metadata.frameworks.length &&
+      metadata.testingFramework.trim() &&
+      metadata.packageManager.trim(),
+  );
 }
 
 function toProject(state: SetupState): Project {
-  const id = state.metadata.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `project-${Date.now()}`;
-  const initials = state.metadata.name.split(/[\s-]+/).map((item) => item[0]).join("").slice(0, 2).toUpperCase();
+  const id =
+    state.metadata.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || `project-${Date.now()}`;
+  const initials = state.metadata.name
+    .split(/[\s-]+/)
+    .map((item) => item[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const repoBase = state.codePlatform === "bitbucket" ? "bitbucket.org" : state.codePlatform === "gitlab" ? "gitlab.com" : "github.com";
+
   return {
     id,
     name: state.metadata.name,
     shortName: initials || "NP",
-    repository: state.codePlatform === "github" ? `github.com/telerik/${state.metadata.name}` : state.localPath,
+    repository: `${repoBase}/progress/${state.metadata.name}`,
     description: state.metadata.description,
   };
 }

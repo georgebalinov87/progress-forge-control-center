@@ -1,6 +1,6 @@
-# Nia Control Center Prototype
+# Forge Control Center Prototype
 
-High-fidelity React and TypeScript prototype for reviewing the Nia Local Control Center experience.
+High-fidelity React and TypeScript prototype for reviewing the Forge Local Control Center experience.
 
 ## Local development
 
@@ -15,4 +15,4 @@ npm run dev
 npm run build
 ```
 
-The prototype uses local mock data only. It does not connect to Nia, repositories, issue providers, agents, authentication, or cloud infrastructure.
+The prototype uses local mock data only. It does not connect to Forge, repositories, issue providers, agents, authentication, or cloud infrastructure.

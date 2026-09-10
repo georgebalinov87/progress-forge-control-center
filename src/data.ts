@@ -87,7 +87,7 @@ export const artifacts = {
     "pull-request.md",
     "Pull request draft",
     [
-      "Add configurable OAuth providers and callback handling to Nia authentication.",
+      "Add configurable OAuth providers and callback handling to Forge authentication.",
       "- Add provider adapter\n- Validate OAuth state\n- Preserve existing token authentication\n- Add focused tests",
       "Ready for engineering review.",
     ],
@@ -96,10 +96,10 @@ export const artifacts = {
 
 export const projects: Project[] = [
   {
-    id: "nia-core",
-    name: "Nia Core",
+    id: "forge-core",
+    name: "Forge Core",
     shortName: "NC",
-    repository: "github.com/progress/nia-core",
+    repository: "github.com/progress/forge-core",
     description: "Core orchestration, authentication, and workflow services.",
   },
   {
@@ -121,7 +121,7 @@ export const projects: Project[] = [
 export const issues: Issue[] = [
   {
     id: "1842",
-    projectId: "nia-core",
+    projectId: "forge-core",
     title: "Add OAuth support",
     description:
       "Allow users to authenticate using OAuth providers while preserving the existing local token workflow. Include clear configuration and callback error handling.",
@@ -131,7 +131,7 @@ export const issues: Issue[] = [
   },
   {
     id: "1839",
-    projectId: "nia-core",
+    projectId: "forge-core",
     title: "Improve CLI diagnostics",
     description: "Make local engine connection failures easier to understand and resolve.",
     status: "open",
@@ -140,7 +140,7 @@ export const issues: Issue[] = [
   },
   {
     id: "1814",
-    projectId: "nia-core",
+    projectId: "forge-core",
     title: "Improve error handling",
     description: "Normalize workflow errors and surface actionable recovery guidance.",
     status: "open",
@@ -149,7 +149,7 @@ export const issues: Issue[] = [
   },
   {
     id: "1798",
-    projectId: "nia-core",
+    projectId: "forge-core",
     title: "Refactor config loader",
     description: "Separate source loading from schema validation.",
     status: "closed",
@@ -212,7 +212,7 @@ export const workflowSteps = (): WorkflowStep[] => [
 export const initialWorkflows: WorkflowRun[] = [
   {
     id: "wf-oauth-running",
-    projectId: "nia-core",
+    projectId: "forge-core",
     issueId: "1842",
     workflowName: "Issue → Pull Request",
     startedBy: "Stefan",
@@ -242,7 +242,7 @@ export const initialWorkflows: WorkflowRun[] = [
   },
   {
     id: "wf-error-waiting",
-    projectId: "nia-core",
+    projectId: "forge-core",
     issueId: "1814",
     workflowName: "Issue → Pull Request",
     startedBy: "Elena",
@@ -270,7 +270,7 @@ export const initialWorkflows: WorkflowRun[] = [
   },
   {
     id: "wf-cli-failed",
-    projectId: "nia-core",
+    projectId: "forge-core",
     issueId: "1839",
     workflowName: "Issue → Pull Request",
     startedBy: "Yoan",
@@ -300,7 +300,7 @@ export const initialWorkflows: WorkflowRun[] = [
   },
   {
     id: "wf-config-complete",
-    projectId: "nia-core",
+    projectId: "forge-core",
     issueId: "1798",
     workflowName: "Issue → Pull Request",
     startedBy: "Stefan",

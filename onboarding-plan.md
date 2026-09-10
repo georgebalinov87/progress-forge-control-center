@@ -1,12 +1,12 @@
-# Nia Control Center First-Time Setup Prototype Plan
+# Forge Control Center First-Time Setup Prototype Plan
 
 ## 1. Purpose
 
 Extend the React + TypeScript visual prototype so it starts with the **first-time user journey**, before any projects are configured.
 
-The user must be guided from an empty Nia installation to a configured first project. After setup, the user enters the existing project, issue, workflow, progress, and artifact experience.
+The user must be guided from an empty Forge installation to a configured first project. After setup, the user enters the existing project, issue, workflow, progress, and artifact experience.
 
-This remains a **visual prototype only**. Use mock data and simulated checks. Do not access the real filesystem, run shell commands, authenticate with external services, create TOML files, or call Nia.
+This remains a **visual prototype only**. Use mock data and simulated checks. Do not access the real filesystem, run shell commands, authenticate with external services, create TOML files, or call Forge.
 
 ## 2. Core Entry Logic
 
@@ -77,14 +77,14 @@ Route:
 Suggested content:
 
 ```text
-Welcome to Nia
+Welcome to Forge
 
 Set up your first project to connect its repository,
 issue tracker, coding agent, and project context.
 
 [ Add your first project ]
 
-Already use Nia in this repository?
+Already use Forge in this repository?
 [ Import existing configuration ]
 
 Prototype only: [ Load demo workspace ]
@@ -117,7 +117,7 @@ Layout:
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ Nia                                             Setup        │
+│ Forge                                             Setup        │
 ├──────────────────────────────────────────────────────────────┤
 │ 1 Project  2 Code  3 Issues  4 Agent  5 Model  6 Details   │
 ├──────────────────────────────────────────────────────────────┤
@@ -154,7 +154,7 @@ Show the setup prerequisites as visual statuses:
 ```text
 Environment check
 
-✓ Nia installed
+✓ Forge installed
 ✓ Local Git repository support available
 ✓ GitHub CLI available
 ✓ Node.js available
@@ -183,8 +183,8 @@ Add your first project
 (•) Use a local repository
     Select a repository already cloned on this machine.
 
-( ) Import an existing Nia configuration
-    Use a repository that already contains .nia/config.
+( ) Import an existing Forge configuration
+    Use a repository that already contains .forge/config.
 ```
 
 ### 7.3 Select local repository
@@ -206,9 +206,9 @@ Use a fake folder picker with predefined repository options.
 Simulate detection of:
 
 ```text
-.nia/config/agents.toml
-.nia/config/project.toml
-.nia/config/toolchain.toml
+.forge/config/agents.toml
+.forge/config/project.toml
+.forge/config/toolchain.toml
 ```
 
 If detected, prefill the later wizard steps but allow the user to review and change all values.
@@ -253,7 +253,7 @@ Connection
 ```text
 Local only
 
-Nia will use the selected local Git repository without
+Forge will use the selected local Git repository without
 connecting to an external code platform.
 ```
 
@@ -307,7 +307,7 @@ Site URL
 [ https://example.atlassian.net ]
 
 Project key
-[ NIA ]
+[ FORGE ]
 
 [ Connect ]
 ```
@@ -428,7 +428,7 @@ Package manager
 Suggested form:
 
 ```text
-Tell Nia about this project
+Tell Forge about this project
 
 Project name *
 [ healthcare-app-angular ]
@@ -504,9 +504,9 @@ TypeScript · Angular · Jest · npm
 Optionally show which conceptual configuration files would exist:
 
 ```text
-.nia/config/agents.toml
-.nia/config/project.toml
-.nia/config/toolchain.toml
+.forge/config/agents.toml
+.forge/config/project.toml
+.forge/config/toolchain.toml
 ```
 
 Do not show raw TOML by default. A secondary **Preview configuration** action may open a read-only conceptual preview.
@@ -549,7 +549,7 @@ Route:
 ```text
 Your project is ready
 
-healthcare-app-angular has been added to Nia.
+healthcare-app-angular has been added to Forge.
 
 ✓ Repository configured
 ✓ Issue tracker configured
@@ -672,7 +672,7 @@ Repository choices:
 
 ```text
 /Users/stefan/work/healthcare-app-angular
-/Users/stefan/work/project-nia
+/Users/stefan/work/project-forge
 /Users/stefan/work/new-project
 ```
 
@@ -757,7 +757,7 @@ Provide deterministic states for:
 ## 20. Primary End-to-End Demo
 
 ```text
-1. Open Nia with no configured projects.
+1. Open Forge with no configured projects.
 2. See Welcome.
 3. Select Add your first project.
 4. Review the mocked environment check.
@@ -787,7 +787,7 @@ Provide deterministic states for:
 ### Required setup
 
 - User can select a simulated local repository.
-- User can import a simulated existing Nia configuration.
+- User can import a simulated existing Forge configuration.
 - User can choose a code platform.
 - User can independently choose an issue tracker.
 - User can select GitHub Copilot, Claude Code, or OpenCode.
@@ -815,7 +815,7 @@ Provide deterministic states for:
 - No repository is scanned.
 - No real authentication occurs.
 - No external API is called.
-- No real Nia configuration is created.
+- No real Forge configuration is created.
 - No TOML file is modified.
 
 ## 22. UX Success Questions
@@ -825,8 +825,8 @@ The setup should let a first-time user answer:
 1. **What project am I adding?**
 2. **Where is its code hosted?**
 3. **Where do its issues come from?**
-4. **Which coding agent will Nia use?**
-5. **What project context will Nia provide to the agent?**
+4. **Which coding agent will Forge use?**
+5. **What project context will Forge provide to the agent?**
 6. **Is the setup ready, or what still needs attention?**
 7. **What happens after setup is complete?**
 

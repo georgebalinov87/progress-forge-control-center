@@ -34,6 +34,7 @@ type PrototypeContextValue = {
   cancelWorkflow: (id: string) => void;
   retryStep: (workflowId: string, stepId: string) => void;
   restartStep: (workflowId: string, stepId: string) => void;
+  setWorkflowSteps: (workflowId: string, steps: WorkflowRun["steps"]) => void;
   approveStep: (workflowId: string) => void;
   rejectStep: (workflowId: string) => void;
   requestChanges: (workflowId: string, feedback: string) => void;
@@ -277,6 +278,19 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
       ),
     }));
 
+  const setWorkflowSteps = (workflowId: string, steps: WorkflowRun["steps"]) =>
+    updateWorkflow(workflowId, (workflow) => ({
+      ...workflow,
+      steps,
+      status: steps.some((step) => step.status === "running")
+        ? "running"
+        : steps.some((step) => step.status === "waiting")
+          ? "waiting"
+          : steps.some((step) => step.status === "failed")
+            ? "failed"
+            : workflow.status,
+    }));
+
   const approveStep = (workflowId: string) =>
     updateWorkflow(workflowId, (workflow) => ({
       ...workflow,
@@ -346,6 +360,7 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
       cancelWorkflow,
       retryStep,
       restartStep,
+      setWorkflowSteps,
       approveStep,
       rejectStep,
       requestChanges,

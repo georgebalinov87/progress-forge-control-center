@@ -1,18 +1,18 @@
-# Nia Local Control Center Visual Prototype Plan
+# Forge Local Control Center Visual Prototype Plan
 
 ## 1. Purpose
 
-Build a high-fidelity, stateful **React + TypeScript visual prototype** of the Nia Local Control Center.
+Build a high-fidelity, stateful **React + TypeScript visual prototype** of the Forge Local Control Center.
 
-The prototype is intended for UX and cross-team discussion. It is **not** a production implementation and must not integrate with the real Nia engine, repositories, issue providers, authentication, agents, or cloud infrastructure.
+The prototype is intended for UX and cross-team discussion. It is **not** a production implementation and must not integrate with the real Forge engine, repositories, issue providers, authentication, agents, or cloud infrastructure.
 
 The prototype should make the following experience tangible:
 
-1. A user enters Nia and sees the projects they work on.
+1. A user enters Forge and sees the projects they work on.
 2. Selecting a project shows project activity, including currently running workflows.
 3. The user can browse issues in the selected project.
 4. Selecting an issue lets the user start a workflow.
-5. The prototype should also explore issue-level Nia commands such as Ask and Issue Draft, clearly labeled as a **concept / future exploration** because individual command UI is outside the current MVP scope.
+5. The prototype should also explore issue-level Forge commands such as Ask and Issue Draft, clearly labeled as a **concept / future exploration** because individual command UI is outside the current MVP scope.
 6. Running work shows progress and status.
 7. Workflows expose their individual stages/steps and the current step.
 8. Users can visually exercise pause, resume, retry/restart, cancel, approval, rejection, and input states.
@@ -22,7 +22,7 @@ The prototype should make the following experience tangible:
 
 The primary UX question the prototype should help answer is:
 
-> Can a user understand what Nia is doing, why it stopped, what it produced, and what they can do next, without understanding the CLI?
+> Can a user understand what Forge is doing, why it stopped, what it produced, and what they can do next, without understanding the CLI?
 
 ---
 
@@ -34,7 +34,7 @@ Fake all external behavior.
 
 Do **not** implement:
 
-- Real Nia engine integration
+- Real Forge engine integration
 - GitHub/Azure DevOps/Jira integration
 - Real repository access
 - Real workflow execution
@@ -62,7 +62,7 @@ The prototype should prioritize:
 - Workflow-to-issue relationships
 - Project-level visibility
 
-### 2.3 Nia should not look like a chat application
+### 2.3 Forge should not look like a chat application
 
 The dominant visual model should be **controlled workflow execution**, not conversation.
 
@@ -125,7 +125,7 @@ Suggested routes:
 ## 4. Information Architecture
 
 ```text
-Nia Control Center
+Forge Control Center
 │
 ├── Projects
 │   ├── Project
@@ -170,11 +170,11 @@ Persistent project navigation approximately 240-280px wide.
 Example:
 
 ```text
-nia
+forge
 
 PROJECTS
 
-● Nia Core
+● Forge Core
   3 running
 
 ○ AppBuilder
@@ -202,7 +202,7 @@ Requirements:
 Example:
 
 ```text
-Nia Core                       Local engine ●       Stefan ▾
+Forge Core                       Local engine ●       Stefan ▾
 ```
 
 Possible elements:
@@ -286,7 +286,7 @@ Example:
 ```text
 Issues                                      Search...
 
-ID     Issue                           Status      Nia
+ID     Issue                           Status      Forge
 1842   Add OAuth support               Open        Running
 1839   Improve CLI diagnostics         Open        —
 1814   Improve error handling          Open        Input
@@ -320,7 +320,7 @@ Allow users to authenticate using OAuth...
 
 ──────────────────────────────────────────────
 
-Nia
+Forge
 
 [ Run workflow ]        [ Run command ▾ ]
 
@@ -339,7 +339,7 @@ Previous runs
 
 ### Scope label
 
-Individual Nia commands are exploratory and outside current MVP scope.
+Individual Forge commands are exploratory and outside current MVP scope.
 
 Display a small visual label such as:
 
@@ -589,7 +589,7 @@ Example:
 
 Waiting for your approval
 
-Nia created an implementation plan.
+Forge created an implementation plan.
 
 📄 implementation-plan.md
 
@@ -684,7 +684,7 @@ No editing is required.
 
 ---
 
-## 16. Experimental Nia Commands
+## 16. Experimental Forge Commands
 
 This section exists to explore UX ideas and should be visibly labeled as non-MVP concept functionality.
 
@@ -697,7 +697,7 @@ Run command ▾
 Possible mock commands:
 
 ```text
-Ask Nia
+Ask Forge
 Issue draft
 Review
 ```
@@ -705,10 +705,10 @@ Review
 Command picker example:
 
 ```text
-Run Nia command                  CONCEPT
+Run Forge command                  CONCEPT
 
 ┌──────────────────────────┐
-│ ✦ Ask Nia                │
+│ ✦ Ask Forge                │
 │ Ask about this issue     │
 └──────────────────────────┘
 
@@ -721,7 +721,7 @@ Run Nia command                  CONCEPT
 ### Ask flow
 
 ```text
-Ask Nia
+Ask Forge
 
 Issue
 #1842 Add OAuth support
@@ -735,7 +735,7 @@ Question
 After Run:
 
 ```text
-Ask Nia                         ● Running
+Ask Forge                         ● Running
 
 Analyzing issue...
 ███████████████░░░░░░░░
@@ -746,10 +746,10 @@ Artifacts will appear here.
 Then:
 
 ```text
-Ask Nia                         ✓ Completed
+Ask Forge                         ✓ Completed
 
 Artifacts
-📄 nia-response.md               View
+📄 forge-response.md               View
 ```
 
 Use the same artifact viewer as workflows.
@@ -989,7 +989,7 @@ Create at least 3 representative projects.
 Example:
 
 ```text
-Nia Core
+Forge Core
 AppBuilder
 DevTools
 ```
@@ -1086,7 +1086,7 @@ Workflow completed
 
 ### Important
 
-The simulation does not need to represent real Nia timing or execution semantics.
+The simulation does not need to represent real Forge timing or execution semantics.
 
 Its purpose is to exercise UI states.
 
@@ -1153,13 +1153,13 @@ Include basic visual treatment for:
 ```text
 No workflows are running in this project.
 
-Select an issue to start a Nia workflow.
+Select an issue to start a Forge workflow.
 ```
 
-### Issue with no previous Nia activity
+### Issue with no previous Forge activity
 
 ```text
-No Nia runs for this issue yet.
+No Forge runs for this issue yet.
 
 [ Run workflow ]
 ```
@@ -1323,7 +1323,7 @@ Add:
 
 ```text
 Run Command
-Ask Nia
+Ask Forge
 Issue Draft
 Command progress
 Command artifacts
@@ -1376,9 +1376,9 @@ This is useful because workflow interactions modify the mock state during presen
 Optimize the prototype for this exact presentation path:
 
 ```text
-1. Open Nia.
+1. Open Forge.
 2. See several projects in the project sidebar.
-3. Select Nia Core.
+3. Select Forge Core.
 4. Immediately see workflows currently running in that project.
 5. Open Issues.
 6. Select #1842 "Add OAuth support".
@@ -1437,11 +1437,11 @@ Open project
 ```text
 Open issue
 → Run command
-→ Choose Ask Nia
+→ Choose Ask Forge
 → Enter mock question
 → Run
 → See progress
-→ Open nia-response.md
+→ Open forge-response.md
 ```
 
 ---
@@ -1558,9 +1558,9 @@ PROJECT
 
 At every point the user should be able to answer four questions quickly:
 
-1. **What is Nia doing?**
+1. **What is Forge doing?**
 2. **Where is it in the workflow?**
-3. **Does Nia need anything from me?**
-4. **What has Nia produced so far?**
+3. **Does Forge need anything from me?**
+4. **What has Forge produced so far?**
 
 Design and implementation decisions in this prototype should be judged primarily against those four questions.

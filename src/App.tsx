@@ -9,6 +9,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   Circle,
   CirclePause,
@@ -19,7 +20,9 @@ import {
   FileCode2,
   FileText,
   GitPullRequest,
+  GripVertical,
   HardDrive,
+  Hammer,
   HelpCircle,
   Home,
   Inbox,
@@ -46,6 +49,15 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
+  cancelCircleIcon,
+  checkCircleIcon,
+  fileIcon,
+  gearIcon,
+  pauseIcon,
+  playIcon,
+  type SVGIcon,
+} from "@progress/kendo-svg-icons";
+import {
   useEffect,
   useMemo,
   useState,
@@ -64,7 +76,26 @@ import {
 } from "react-router-dom";
 import { usePrototype } from "./prototype";
 import { SetupFlow } from "./setup";
-import type { Artifact, Issue, Role, StepStatus, WorkflowRun, WorkflowStatus } from "./types";
+import type { Artifact, Issue, Role, StepStatus, WorkflowRun, WorkflowStatus, WorkflowStep } from "./types";
+
+const workflowCommandCatalog: Array<{ name: string; description: string }> = [
+  { name: "Understand issue", description: "Analyze the issue, repository context, and constraints." },
+  { name: "Create plan", description: "Produce an implementation plan and identify affected files." },
+  { name: "Review plan", description: "Wait for human approval before implementation." },
+  { name: "Implement", description: "Apply the planned changes with the selected coding agent." },
+  { name: "Validate", description: "Run focused tests and check the implementation." },
+  { name: "Review & create PR", description: "Review the result and prepare the pull request." },
+  { name: "Summarize outcome", description: "Produce a concise summary of outcome and follow-up actions." },
+  { name: "Prepare release note", description: "Draft a release-ready change note for project stakeholders." },
+];
+
+function KendoIcon({ icon, className }: { icon: SVGIcon; className?: string }) {
+  return (
+    <span className={`k-svg-icon k-icon-md ${className ?? ""}`} aria-hidden="true">
+      <svg viewBox={icon.viewBox || "0 0 16 16"} dangerouslySetInnerHTML={{ __html: icon.content }} />
+    </span>
+  );
+}
 
 const workflowStatusMeta: Record<
   WorkflowStatus,
@@ -147,9 +178,9 @@ function AppShell() {
       </button>
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark">n</div>
+          <div className="brand-mark"><Hammer size={16} /></div>
           <div>
-            <strong>nia</strong>
+            <strong>forge</strong>
             <span>Control Center</span>
           </div>
         </div>
@@ -226,9 +257,7 @@ function AppShell() {
           </NavLink>
           <NavLink to={`/projects/${project.id}/issues`}>Issues</NavLink>
           <NavLink to={`/projects/${project.id}/workflows`}>Workflows</NavLink>
-          {role === "admin" && (
-            <NavLink to={`/projects/${project.id}/settings`}>Configuration</NavLink>
-          )}
+          <NavLink to={`/projects/${project.id}/settings`}>Configuration</NavLink>
         </nav>
         <main className="page">
           <Routes>
@@ -318,7 +347,7 @@ function ProjectOverview() {
       <PageHeader
         eyebrow="Project overview"
         title={`Good morning, Stefan`}
-        description={`Here’s what Nia is doing in ${project.name}.`}
+        description={`Here’s what Forge is doing in ${project.name}.`}
       />
       <div className="metric-grid">
         <Metric icon={Activity} label="Active workflows" value={String(active.length)} detail="Across local and cloud" />
@@ -342,7 +371,7 @@ function ProjectOverview() {
           <EmptyState
             icon={Inbox}
             title="No workflows are running"
-            description="Select an issue to start a Nia workflow."
+            description="Select an issue to start a Forge workflow."
             action={<Link className="button primary" to={`/projects/${projectId}/issues`}>Browse issues</Link>}
           />
         )}
@@ -460,7 +489,7 @@ function IssuesPage() {
 
   return (
     <>
-      <PageHeader title="Issues" description="Browse project work and start a Nia workflow." />
+      <PageHeader title="Issues" description="Browse project work and start a Forge workflow." />
       <div className="toolbar">
         <label className="search-field">
           <Search size={16} />
@@ -476,7 +505,7 @@ function IssuesPage() {
       </div>
       <div className="panel table-wrap">
         <table>
-          <thead><tr><th>Issue</th><th>Status</th><th>Assignee</th><th>Nia activity</th><th /></tr></thead>
+          <thead><tr><th>Issue</th><th>Status</th><th>Assignee</th><th>Forge activity</th><th /></tr></thead>
           <tbody>
             {projectIssues.map((issue) => {
               const issueWorkflows = workflows.filter((workflow) => workflow.issueId === issue.id);
@@ -523,9 +552,9 @@ function IssueDetailPage() {
         <p>{issue.description}</p>
         <div className="label-row">{issue.labels.map((label) => <span key={label}>{label}</span>)}</div>
       </div>
-      <section className="nia-panel">
-        <div className="nia-panel-header">
-          <div className="nia-heading"><span className="brand-mark small">n</span><div><h2>Nia</h2><p>Run controlled work for this issue.</p></div></div>
+      <section className="forge-panel">
+        <div className="forge-panel-header">
+          <div className="forge-heading"><span className="brand-mark small"><Hammer size={14} /></span><div><h2>Forge</h2><p>Run controlled work for this issue.</p></div></div>
           <div className="page-actions">
             <button className="button primary" disabled={role === "read-only"} onClick={() => setStartOpen(true)}>
               <Play size={15} /> Run workflow
@@ -542,7 +571,7 @@ function IssueDetailPage() {
         <SectionHeader title="Previous runs" description="Workflow and command activity for this issue." />
         <div className="panel workflow-list">
           {previousRuns.length ? previousRuns.map((workflow) => <WorkflowRow key={workflow.id} workflow={workflow} issue={issue} />) : (
-            <EmptyState icon={Archive} title="No Nia runs for this issue yet" description="Start a workflow to analyze and implement this issue." action={role !== "read-only" ? <button className="button primary" onClick={() => setStartOpen(true)}>Run workflow</button> : undefined} />
+            <EmptyState icon={Archive} title="No Forge runs for this issue yet" description="Start a workflow to analyze and implement this issue." action={role !== "read-only" ? <button className="button primary" onClick={() => setStartOpen(true)}>Run workflow</button> : undefined} />
           )}
         </div>
       </section>
@@ -580,11 +609,11 @@ function StartWorkflowDialog({ issue, onClose }: { issue: Issue; onClose: () => 
         <div className="modal-body">
           <label className="field"><span>Workflow</span><select><option>Issue → Pull Request</option></select></label>
           <fieldset className="field"><legend>Execution</legend><div className="choice-grid">
-            <button type="button" className={`choice-card ${execution === "local" ? "selected" : ""}`} onClick={() => setExecution("local")}><HardDrive size={20} /><span><strong>Local</strong><small>Run with the local Nia engine</small></span>{execution === "local" && <CheckCircle2 size={17} />}</button>
+            <button type="button" className={`choice-card ${execution === "local" ? "selected" : ""}`} onClick={() => setExecution("local")}><HardDrive size={20} /><span><strong>Local</strong><small>Run with the local Forge engine</small></span>{execution === "local" && <CheckCircle2 size={17} />}</button>
             <button type="button" className={`choice-card ${execution === "cloud" ? "selected" : ""}`} onClick={() => setExecution("cloud")}><Cloud size={20} /><span><strong>Cloud Agent</strong><small>Run in an isolated cloud environment</small></span>{execution === "cloud" && <CheckCircle2 size={17} />}</button>
           </div></fieldset>
-          <label className="field"><span>Coding agent</span><select value={agent} onChange={(event) => setAgent(event.target.value)}><option>GitHub Copilot</option><option>Nia Coding Agent</option></select></label>
-          <div className="run-summary"><Sparkles size={17} /><span>Nia will analyze the issue, create a plan, wait for approval, implement, validate, and prepare a pull request.</span></div>
+          <label className="field"><span>Coding agent</span><select value={agent} onChange={(event) => setAgent(event.target.value)}><option>GitHub Copilot</option><option>Forge Coding Agent</option></select></label>
+          <div className="run-summary"><Sparkles size={17} /><span>Forge will analyze the issue, create a plan, wait for approval, implement, validate, and prepare a pull request.</span></div>
         </div>
         <div className="modal-footer"><button type="button" className="button ghost" onClick={onClose}>Cancel</button><button className="button primary"><Play size={15} /> Start workflow</button></div>
       </form>
@@ -602,14 +631,14 @@ function RunCommandDialog({ issue, onClose }: { issue: Issue; onClose: () => voi
   const [progress, setProgress] = useState(12);
   const resultArtifact = useMemo<Artifact>(() => ({
     id: `command-${issue.id}`,
-    name: command === "ask" ? "nia-response.md" : command === "draft" ? "issue-draft.md" : "review-summary.md",
+    name: command === "ask" ? "forge-response.md" : command === "draft" ? "issue-draft.md" : "review-summary.md",
     type: "markdown",
     versions: [{
       version: 1,
       label: "Current",
       createdAt: "Just now",
       content: command === "ask"
-        ? `# Nia response\n\n## Question\n\n${question}\n\n## Answer\n\nOAuth affects provider configuration, callback routing, authentication middleware, and session creation. The safest implementation keeps provider-specific behavior behind an adapter and preserves the current token path.\n\n## Recommended focus\n\n1. Validate callback state\n2. Normalize provider errors\n3. Add focused middleware tests`
+        ? `# Forge response\n\n## Question\n\n${question}\n\n## Answer\n\nOAuth affects provider configuration, callback routing, authentication middleware, and session creation. The safest implementation keeps provider-specific behavior behind an adapter and preserves the current token path.\n\n## Recommended focus\n\n1. Validate callback state\n2. Normalize provider errors\n3. Add focused middleware tests`
         : command === "draft"
           ? `# Issue draft\n\n## Summary\n\nAdd configurable OAuth authentication while preserving local token behavior.\n\n## Acceptance criteria\n\n- Provider settings are validated\n- Callback failures are actionable\n- Existing token authentication is unchanged\n- Focused tests cover success and failure`
           : `# Issue review\n\n## Findings\n\nThe issue is implementation-ready. The main risk is coupling provider logic directly to middleware.\n\n## Recommendation\n\nUse a provider adapter and require callback-state validation.`,
@@ -635,21 +664,21 @@ function RunCommandDialog({ issue, onClose }: { issue: Issue; onClose: () => voi
     setCommand(value);
     setStage("form");
   };
-  const title = stage === "picker" ? "Run Nia command" : command === "ask" ? "Ask Nia" : command === "draft" ? "Issue draft" : "Review issue";
+  const title = stage === "picker" ? "Run Forge command" : command === "ask" ? "Ask Forge" : command === "draft" ? "Issue draft" : "Review issue";
   return (
     <Modal title={title} subtitle={<span className="concept-label">Concept · Future exploration</span>} onClose={onClose} wide>
       <div className="modal-body">
         {stage === "picker" && <div className="command-grid">
-          <CommandCard icon={HelpCircle} title="Ask Nia" description="Ask a focused question about this issue." onClick={() => choose("ask")} />
+          <CommandCard icon={HelpCircle} title="Ask Forge" description="Ask a focused question about this issue." onClick={() => choose("ask")} />
           <CommandCard icon={FileCode2} title="Issue draft" description="Generate a structured issue draft." onClick={() => choose("draft")} />
           <CommandCard icon={Search} title="Review" description="Review readiness, scope, and risks." onClick={() => choose("review")} />
         </div>}
         {stage === "form" && <div className="command-form">
           <div className="command-issue"><span>Issue</span><strong>#{issue.id} · {issue.title}</strong></div>
           {command === "ask" && <label className="field"><span>Question</span><textarea rows={4} value={question} onChange={(event) => setQuestion(event.target.value)} /></label>}
-          {command !== "ask" && <div className="run-summary"><Sparkles size={17} /><span>Nia will use the issue context to generate a mock {command === "draft" ? "issue draft" : "readiness review"}.</span></div>}
+          {command !== "ask" && <div className="run-summary"><Sparkles size={17} /><span>Forge will use the issue context to generate a mock {command === "draft" ? "issue draft" : "readiness review"}.</span></div>}
         </div>}
-        {stage === "running" && <div className="command-running"><span className="large-status blue"><LoaderCircle size={22} /> Running</span><h3>Analyzing issue context…</h3><p>Nia is preparing the command output and artifact.</p><ProgressBar value={progress} /><small>{progress}% complete</small></div>}
+        {stage === "running" && <div className="command-running"><span className="large-status blue"><LoaderCircle size={22} /> Running</span><h3>Analyzing issue context…</h3><p>Forge is preparing the command output and artifact.</p><ProgressBar value={progress} /><small>{progress}% complete</small></div>}
         {stage === "completed" && <div className="command-complete"><span className="large-status green"><CheckCircle2 size={22} /> Completed</span><h3>Command artifact is ready</h3><p>Review the generated Markdown without leaving this issue.</p><button className="artifact-row" onClick={() => openArtifact(resultArtifact)}><span className="artifact-icon"><FileText size={18} /></span><span><strong>{resultArtifact.name}</strong><small>Markdown · Created just now</small></span><span>View</span><ChevronRight size={16} /></button></div>}
       </div>
       <div className="modal-footer">
@@ -680,9 +709,9 @@ function WorkflowsPage() {
   ];
   return (
     <>
-      <PageHeader title="Workflows" description="Monitor every Nia workflow running in this project." />
+      <PageHeader title="Workflows" description="Monitor every Forge workflow running in this project." />
       <div className="toolbar">
-        <div className="segmented workflow-filters">{filters.map((item) => <button key={item.value} className={filter === item.value ? "active" : ""} onClick={() => setFilter(item.value)}>{item.label}<span>{workflows.filter((workflow) => workflow.projectId === projectId && (item.value === "all" || workflow.status === item.value)).length}</span></button>)}</div>
+        <div className="segmented workflow-filters">{filters.map((item) => <button key={item.value} className={filter === item.value ? "active" : ""} onClick={() => setFilter(item.value)}>{item.label}</button>)}</div>
         <button className="button secondary"><ListFilter size={15} /> More filters</button>
       </div>
       <div className="panel table-wrap">
@@ -712,7 +741,8 @@ function WorkflowsPage() {
 function WorkflowDetailPage() {
   const { projectId, workflowId } = useParams();
   const navigate = useNavigate();
-  const { workflows, issues, role, pauseWorkflow, resumeWorkflow, cancelWorkflow } = usePrototype();
+  const { workflows, issues, role, pauseWorkflow, resumeWorkflow, cancelWorkflow, setWorkflowSteps } = usePrototype();
+  const [editOpen, setEditOpen] = useState(false);
   const workflow = workflows.find((item) => item.id === workflowId);
   if (!workflow) return <Navigate to={`/projects/${projectId}/workflows`} replace />;
   const issue = getIssue(workflow, issues);
@@ -726,6 +756,7 @@ function WorkflowDetailPage() {
           <div><span className="eyebrow">Workflow run</span><h1>{workflow.workflowName}</h1><Link to={`/projects/${projectId}/issues/${issue?.id}`}>#{issue?.id} · {issue?.title}</Link></div>
         </div>
         <div className="page-actions">
+          <button className="button secondary" disabled={role === "read-only"} onClick={() => setEditOpen(true)}><KendoIcon icon={gearIcon} className="kendo-inline-icon" /> Edit steps</button>
           {workflow.status === "running" && <button className="button secondary" disabled={role === "read-only"} onClick={() => pauseWorkflow(workflow.id)}><Pause size={15} /> Pause</button>}
           {workflow.status === "paused" && <button className="button primary" disabled={role === "read-only"} onClick={() => resumeWorkflow(workflow.id)}><Play size={15} /> Resume</button>}
           {!["completed", "cancelled"].includes(workflow.status) && <button className="button danger-subtle" disabled={role === "read-only"} onClick={() => cancelWorkflow(workflow.id)}><Square size={14} /> Cancel</button>}
@@ -744,7 +775,150 @@ function WorkflowDetailPage() {
         <div className="timeline-heading"><div><h2>Workflow timeline</h2><p>Follow progress, decisions, and outputs for each stage.</p></div><span>{workflow.steps.filter((item) => item.status === "completed").length} of {workflow.steps.length} complete</span></div>
         <div className="timeline">{workflow.steps.map((step, index) => <WorkflowStepCard key={step.id} workflow={workflow} step={step} index={index} />)}</div>
       </section>
+      {editOpen && <WorkflowEditDialog workflow={workflow} onClose={() => setEditOpen(false)} onSave={(steps) => { setWorkflowSteps(workflow.id, steps); setEditOpen(false); }} />}
     </>
+  );
+}
+
+function WorkflowEditDialog({
+  workflow,
+  onClose,
+  onSave,
+}: {
+  workflow: WorkflowRun;
+  onClose: () => void;
+  onSave: (steps: WorkflowStep[]) => void;
+}) {
+  const [steps, setSteps] = useState<WorkflowStep[]>(() => structuredClone(workflow.steps));
+  const [newCommand, setNewCommand] = useState<string>(workflowCommandCatalog[0].name);
+  const [showCustomSoon, setShowCustomSoon] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  const moveStep = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= steps.length) return;
+    const next = [...steps];
+    const [item] = next.splice(index, 1);
+    next.splice(target, 0, item);
+    setSteps(next);
+  };
+
+  const removeStep = (index: number) => {
+    if (steps.length === 1) return;
+    setSteps((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const moveByDrag = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= steps.length || to >= steps.length) return;
+    const next = [...steps];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    setSteps(next);
+  };
+
+  const addStep = () => {
+    if (newCommand === "custom") {
+      setShowCustomSoon(true);
+      return;
+    }
+    const catalog = workflowCommandCatalog.find((item) => item.name === newCommand);
+    if (!catalog) return;
+    const idBase = catalog.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    setSteps((current) => [
+      ...current,
+      {
+        id: `${idBase}-${Date.now()}`,
+        name: catalog.name,
+        description: catalog.description,
+        status: "pending",
+        artifacts: [],
+      },
+    ]);
+  };
+
+  const save = () => {
+    const normalized = steps.map((step, index) => ({
+      ...step,
+      status: index === 0 && workflow.status === "running" ? "running" : step.status,
+      progress: index === 0 && workflow.status === "running" ? Math.max(step.progress ?? 5, 5) : step.progress,
+    }));
+    onSave(normalized);
+  };
+
+  return (
+    <Modal title="Edit workflow steps" subtitle={<p className="modal-subtitle">Reorder, remove, or add simulated commands.</p>} onClose={onClose} wide>
+      <div className="modal-body">
+        <div className="command-grid">
+          {steps.map((step, index) => (
+            <div
+              key={`${step.id}-${index}`}
+              className={`workflow-edit-row ${dragIndex === index ? "dragging" : ""}`}
+              draggable
+              onDragStart={() => setDragIndex(index)}
+              onDragEnd={() => setDragIndex(null)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                if (dragIndex === null) return;
+                moveByDrag(dragIndex, index);
+                setDragIndex(null);
+              }}
+            >
+              <div>
+                <strong>{index + 1}. {step.name}</strong>
+                <p>{step.description}</p>
+              </div>
+              <div className="workflow-edit-actions">
+                <button className="icon-button drag-handle" aria-label="Drag step" title="Drag step">
+                  <GripVertical size={16} />
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={() => moveStep(index, -1)}
+                  disabled={index === 0}
+                  aria-label="Move step up"
+                  title="Move step up"
+                >
+                  <ChevronUp size={16} />
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={() => moveStep(index, 1)}
+                  disabled={index === steps.length - 1}
+                  aria-label="Move step down"
+                  title="Move step down"
+                >
+                  <ChevronDown size={16} />
+                </button>
+                <button
+                  className="icon-button danger-icon"
+                  onClick={() => removeStep(index)}
+                  disabled={steps.length === 1}
+                  aria-label="Remove step"
+                  title="Remove step"
+                >
+                  <KendoIcon icon={cancelCircleIcon} className="kendo-inline-icon" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="workflow-edit-add">
+          <label className="field">
+            <span>Add command</span>
+            <select value={newCommand} onChange={(event) => { setNewCommand(event.target.value); setShowCustomSoon(false); }}>
+              {workflowCommandCatalog.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
+              <option value="custom">Custom step (Coming soon)</option>
+            </select>
+          </label>
+          <button className="button secondary" onClick={addStep}><KendoIcon icon={playIcon} className="kendo-inline-icon" /> Add step</button>
+        </div>
+        {showCustomSoon && <div className="prototype-notice"><WandSparkles size={16} /><span>Custom step is coming soon in this prototype.</span></div>}
+      </div>
+      <div className="modal-footer">
+        <button className="button ghost" onClick={onClose}>Cancel</button>
+        <button className="button primary" onClick={save}><KendoIcon icon={checkCircleIcon} className="kendo-inline-icon" /> Save step order</button>
+      </div>
+    </Modal>
   );
 }
 
@@ -776,7 +950,7 @@ function WorkflowStepCard({ workflow, step, index }: { workflow: WorkflowRun; st
           {step.status === "paused" && <div className="state-callout gray"><CirclePause size={21} /><div><strong>Workflow paused</strong><p>{step.activity ?? "This step was paused by a user."}</p><div className="inline-actions"><button className="button primary small" disabled={mutatingDisabled} onClick={() => resumeWorkflow(workflow.id)}><Play size={14} /> Resume</button><button className="button secondary small" disabled={mutatingDisabled} onClick={() => restartStep(workflow.id, step.id)}><RefreshCcw size={14} /> Restart step</button><button className="button ghost small danger-text" disabled={mutatingDisabled} onClick={() => cancelWorkflow(workflow.id)}>Cancel</button></div></div></div>}
           {step.status === "failed" && <div className="state-callout red"><XCircle size={21} /><div><strong>Validation failed</strong><p>{step.message}</p><button className="details-link">View failure details <ChevronRight size={14} /></button><div className="inline-actions"><button className="button primary small" disabled={mutatingDisabled} onClick={() => retryStep(workflow.id, step.id)}><RefreshCcw size={14} /> Retry step</button><button className="button ghost small danger-text" disabled={mutatingDisabled} onClick={() => cancelWorkflow(workflow.id)}>Cancel workflow</button></div></div></div>}
           {step.status === "waiting" && <div className="approval-card">
-            <div className="approval-heading"><span className="approval-icon"><AlertCircle size={20} /></span><div><strong>Waiting for your approval</strong><p>Nia created an implementation plan and needs a decision before continuing.</p></div></div>
+            <div className="approval-heading"><span className="approval-icon"><AlertCircle size={20} /></span><div><strong>Waiting for your approval</strong><p>Forge created an implementation plan and needs a decision before continuing.</p></div></div>
             {!!step.artifacts.length && <ArtifactList artifacts={step.artifacts} onOpen={openArtifact} />}
             <div className="approval-prompt">Review the plan before implementation continues.</div>
             {changesOpen && <label className="field"><span>Requested changes</span><textarea rows={3} value={feedback} onChange={(event) => setFeedback(event.target.value)} /></label>}
@@ -805,17 +979,54 @@ function ArtifactList({ artifacts, onOpen }: { artifacts: Artifact[]; onOpen: (a
 }
 
 function ArtifactDrawer() {
-  const { artifactSelection, setArtifactVersion, closeArtifact } = usePrototype();
-  if (!artifactSelection) return null;
-  const { artifact, version } = artifactSelection;
-  const selected = artifact.versions.find((item) => item.version === version) ?? artifact.versions[0];
+  const { artifactSelection, closeArtifact } = usePrototype();
+  const [editOpen, setEditOpen] = useState(false);
+  const [prompt, setPrompt] = useState("Tighten the summary and emphasize validation outcomes.");
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [editedContent, setEditedContent] = useState("");
+  const artifact = artifactSelection?.artifact;
+  const selected = artifact?.versions[0];
+
+  useEffect(() => {
+    if (!artifact || !selected) return;
+    setEditOpen(false);
+    setMessages([]);
+    setEditedContent(selected.content);
+  }, [artifact, selected]);
+
+  if (!artifact || !selected) return null;
+
+  const applyPrompt = () => {
+    if (!prompt.trim()) return;
+    const nextContent = `${editedContent}\n\n## AI edit request\n\n${prompt}\n\n## Updated note\n\nThis artifact was updated by simulated AI editing in Forge. Manual editing is intentionally disabled in this prototype.`;
+    setMessages((current) => [
+      ...current,
+      { role: "user", content: prompt },
+      { role: "assistant", content: "Updated the artifact with a concise refinement pass." },
+    ]);
+    setEditedContent(nextContent);
+    setPrompt("");
+  };
+
   return (
     <>
       <div className="drawer-scrim" onClick={closeArtifact} />
       <aside className="artifact-drawer" aria-label={`Artifact ${artifact.name}`}>
-        <div className="drawer-header"><div className="drawer-title"><span className="artifact-icon"><FileText size={19} /></span><div><strong>{artifact.name}</strong><small>Markdown artifact</small></div></div><button className="icon-button" onClick={closeArtifact} aria-label="Close artifact"><X size={19} /></button></div>
-        <div className="drawer-toolbar"><label><span>Version</span><select value={version} onChange={(event) => setArtifactVersion(Number(event.target.value))}>{artifact.versions.map((item) => <option key={item.version} value={item.version}>v{item.version} {item.label}</option>)}</select></label><span>Created {selected.createdAt}</span></div>
-        <div className="markdown-viewer"><Markdown content={selected.content} /></div>
+        <div className="drawer-header"><div className="drawer-title"><span className="artifact-icon"><KendoIcon icon={fileIcon} /></span><div><strong>{artifact.name}</strong><small>Markdown artifact</small></div></div><button className="icon-button" onClick={closeArtifact} aria-label="Close artifact"><X size={19} /></button></div>
+        <div className="drawer-toolbar">
+          <span>Created {selected.createdAt}</span>
+          {!editOpen && <button className="button secondary small" onClick={() => setEditOpen(true)}>Edit</button>}
+        </div>
+        {editOpen && <div className="artifact-ai-panel">
+          <div className="artifact-chat-log">
+            {messages.length ? messages.map((item, index) => <div key={index} className={`artifact-chat-line ${item.role}`}><strong>{item.role === "user" ? <><KendoIcon icon={pauseIcon} className="kendo-inline-icon" /> You</> : <><KendoIcon icon={checkCircleIcon} className="kendo-inline-icon" /> Forge AI</>}</strong><p>{item.content}</p></div>) : <div className="artifact-chat-empty">Prompt the artifact to simulate an AI edit. Manual edits are disabled.</div>}
+          </div>
+          <div className="artifact-prompt-row">
+            <input value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the edit you want..." />
+            <button className="button primary small" onClick={applyPrompt}><KendoIcon icon={playIcon} className="kendo-inline-icon" /> Apply</button>
+          </div>
+        </div>}
+        <div className="markdown-viewer"><Markdown content={editedContent} /></div>
       </aside>
     </>
   );
@@ -857,17 +1068,68 @@ function inlineMarkdown(value: string) {
 function ProjectSettingsPage() {
   const { projectId } = useParams();
   const { projects, role } = usePrototype();
+  const [activeTab, setActiveTab] = useState<"repository" | "integrations" | "agents" | "models" | "workflows">("repository");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const project = projects.find((item) => item.id === projectId)!;
   if (role !== "admin") return <div className="access-state"><ShieldCheck size={32} /><h1>Admin access required</h1><p>Switch the prototype role to Admin to explore project configuration.</p></div>;
+
+  const simulateSave = () => {
+    setSaveState("saving");
+    window.setTimeout(() => setSaveState("saved"), 650);
+    window.setTimeout(() => setSaveState("idle"), 1800);
+  };
+
+  const renderTab = () => {
+    if (activeTab === "repository") {
+      return (
+        <>
+          <div className="settings-section"><h2>Repository</h2><p>Connect project context used by Forge workflows.</p><label className="field"><span>Repository URL</span><input defaultValue={`https://${project.repository}`} /></label><label className="field"><span>Default branch</span><input defaultValue="main" /></label></div>
+          <div className="settings-section"><h2>Execution defaults</h2><p>Choose representative defaults for new workflow runs.</p><label className="field"><span>Default execution</span><select defaultValue="local"><option value="local">Local engine</option><option value="cloud">Cloud Agent</option></select></label><label className="toggle-row"><span><strong>Require plan approval</strong><small>Pause workflows before implementation starts.</small></span><input type="checkbox" defaultChecked /></label></div>
+        </>
+      );
+    }
+    if (activeTab === "integrations") {
+      return (
+        <div className="settings-section"><h2>Integrations</h2><p>Mock connection settings for source and tracker services.</p><label className="field"><span>Code platform</span><select defaultValue="github"><option value="github">GitHub</option><option value="gitlab">GitLab</option><option value="bitbucket">Bitbucket</option></select></label><label className="field"><span>Issue tracker</span><select defaultValue="github_issues"><option value="github_issues">GitHub Issues</option><option value="jira">Jira</option><option value="azure_devops">Azure DevOps</option></select></label><label className="toggle-row"><span><strong>Auto-check integrations</strong><small>Run simulated checks during setup and before workflow start.</small></span><input type="checkbox" defaultChecked /></label></div>
+      );
+    }
+    if (activeTab === "agents") {
+      return (
+        <div className="settings-section"><h2>Coding agents</h2><p>Pick default coding agent behavior for this project.</p><label className="field"><span>Default agent</span><select defaultValue="github_copilot"><option value="github_copilot">GitHub Copilot</option><option value="claude_code">Claude Code</option><option value="opencode">OpenCode</option></select></label><label className="toggle-row"><span><strong>Require authentication</strong><small>Block workflow start if selected agent is not authenticated.</small></span><input type="checkbox" defaultChecked /></label><label className="toggle-row"><span><strong>Allow local fallback</strong><small>Use local execution when cloud capacity is unavailable.</small></span><input type="checkbox" defaultChecked /></label></div>
+      );
+    }
+    if (activeTab === "models") {
+      return (
+        <div className="settings-section"><h2>Models</h2><p>Set profile defaults for new workflow runs.</p><label className="field"><span>Default model profile</span><select defaultValue="stable"><option value="stable">Stable</option><option value="balanced">Balanced</option><option value="lite">Lite</option></select></label><label className="field"><span>Temperature (simulated)</span><input defaultValue="0.2" /></label><label className="toggle-row"><span><strong>Allow profile override</strong><small>Let users switch model profile per workflow.</small></span><input type="checkbox" defaultChecked /></label></div>
+      );
+    }
+    return (
+      <div className="settings-section"><h2>Workflows</h2><p>Configure defaults for workflow orchestration behavior.</p><label className="field"><span>Default workflow template</span><select defaultValue="issue-pr"><option value="issue-pr">Issue → Pull Request</option><option value="issue-only">Issue analysis only</option><option value="custom">Custom (coming soon)</option></select></label><label className="field"><span>Concurrency limit (simulated)</span><input defaultValue="2" /></label><label className="toggle-row"><span><strong>Auto-summarize outcomes</strong><small>Generate a completion summary for each finished run.</small></span><input type="checkbox" defaultChecked /></label></div>
+    );
+  };
+
   return (
     <>
-      <PageHeader title="Project configuration" description="Representative settings for where Nia project configuration would live." actions={<button className="button primary">Save changes</button>} />
+      <PageHeader
+        title="Project configuration"
+        description="Representative settings for where Forge project configuration would live."
+        actions={
+          <button className="button primary" onClick={simulateSave} disabled={saveState === "saving"}>
+            {saveState === "saving" ? <><LoaderCircle size={15} /> Saving...</> : saveState === "saved" ? <><Check size={15} /> Saved</> : "Save changes"}
+          </button>
+        }
+      />
       <div className="settings-layout">
-        <nav className="settings-nav"><button className="active"><Box size={16} /> Repository</button><button><Code2 size={16} /> Integrations</button><button><Bot size={16} /> Coding agents</button><button><Sparkles size={16} /> Models</button><button><GitPullRequest size={16} /> Workflows</button></nav>
+        <nav className="settings-nav">
+          <button className={activeTab === "repository" ? "active" : ""} onClick={() => setActiveTab("repository")}><Box size={16} /> Repository</button>
+          <button className={activeTab === "integrations" ? "active" : ""} onClick={() => setActiveTab("integrations")}><Code2 size={16} /> Integrations</button>
+          <button className={activeTab === "agents" ? "active" : ""} onClick={() => setActiveTab("agents")}><Bot size={16} /> Coding agents</button>
+          <button className={activeTab === "models" ? "active" : ""} onClick={() => setActiveTab("models")}><Sparkles size={16} /> Models</button>
+          <button className={activeTab === "workflows" ? "active" : ""} onClick={() => setActiveTab("workflows")}><GitPullRequest size={16} /> Workflows</button>
+        </nav>
         <div className="settings-panel panel">
-          <div className="settings-section"><h2>Repository</h2><p>Connect project context used by Nia workflows.</p><label className="field"><span>Repository URL</span><input defaultValue={`https://${project.repository}`} /></label><label className="field"><span>Default branch</span><input defaultValue="main" /></label></div>
-          <div className="settings-section"><h2>Execution defaults</h2><p>Choose representative defaults for new workflow runs.</p><label className="field"><span>Default execution</span><select defaultValue="local"><option value="local">Local engine</option><option value="cloud">Cloud Agent</option></select></label><label className="toggle-row"><span><strong>Require plan approval</strong><small>Pause workflows before implementation starts.</small></span><input type="checkbox" defaultChecked /></label></div>
-          <div className="prototype-notice"><WandSparkles size={17} /><span>Configuration is visual-only in this prototype and is not persisted.</span></div>
+          {renderTab()}
+          {saveState === "saved" && <div className="prototype-notice"><CheckCircle2 size={17} /><span>Settings saved successfully (simulated).</span></div>}
         </div>
       </div>
     </>
