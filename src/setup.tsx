@@ -12,6 +12,7 @@ import {
   FileCode2,
   FileText,
   Folder,
+  FolderOpen,
   Github,
   HelpCircle,
   Hammer,
@@ -73,9 +74,8 @@ const repositoryOptions = [
 ];
 
 const steps = [
-  { path: "project", label: "Project" },
+  { path: "welcome", label: "Repository" },
   { path: "coding-agent", label: "Coding agent" },
-  { path: "code-platform", label: "Code platform" },
   { path: "issue-tracker", label: "Issue tracker" },
   { path: "project-details", label: "Project details" },
   { path: "review", label: "Review" },
@@ -137,7 +137,7 @@ const initialState = (): SetupState => ({
 });
 
 export function SetupFlow() {
-  const { projects, loadDemoWorkspace, addProject } = usePrototype();
+  const { projects, loadDemoWorkspace, addProject, showDemoControls } = usePrototype();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -159,78 +159,39 @@ export function SetupFlow() {
   const currentPath = location.pathname.split("/").pop() ?? "welcome";
   const currentIndex = steps.findIndex((step) => step.path === currentPath);
   const wizardVisible = currentIndex >= 0;
+  const showSetupHeader = currentPath !== "welcome";
 
   return (
     <div className="setup-shell">
-      <header className="setup-topbar">
-        <div className="setup-brand">
-          <span className="setup-brand-mark"><Hammer size={16} /></span>
-          <span>
-            <strong>forge</strong>
-            <small>Control Center</small>
-          </span>
-        </div>
-        <span className="setup-mode-label">{isReturning ? "Add project" : "First-time setup"}</span>
-      </header>
-      {wizardVisible && <SetupStepper current={currentIndex} />}
-      <main className={wizardVisible ? "setup-main" : "setup-main welcome-main"}>
+      {showSetupHeader && (
+        <header className="setup-topbar">
+          <div className="setup-brand">
+            <span className="setup-brand-mark"><Hammer size={16} /></span>
+            <span>
+              <strong>forge</strong>
+              <small>Control Center</small>
+            </span>
+          </div>
+          {wizardVisible && <SetupStepper current={currentIndex} compact />}
+          <span className="setup-mode-label">{isReturning ? "Add project" : "First-time setup"}</span>
+        </header>
+      )}
+      <main className={showSetupHeader ? "setup-main" : "setup-main welcome-main"}>
         <Routes>
           <Route
             path="welcome"
             element={
-              projects.length ? (
-                <Navigate to={`/projects/${projects[0].id}`} replace />
-              ) : (
-                <WelcomePage
-                  onStartInitialize={() => {
-                    setState((current) => ({
-                      ...current,
-                      mode: "initialize",
-                      localPath: "",
-                      repositoryUrl: "",
-                      environmentReady: false,
-                    }));
-                    navigate("/setup/project");
-                  }}
-                  onStartJoin={() => {
-                    setState((current) => ({
-                      ...current,
-                      mode: "join",
-                      repositoryScenario: "existing_forge",
-                      localPath: "",
-                      repositoryUrl: "",
-                      environmentReady: false,
-                    }));
-                    navigate("/setup/project");
-                  }}
-                  onLoadDemo={() => {
-                    loadDemoWorkspace();
-                    navigate("/projects/forge-core");
-                  }}
-                />
-              )
-            }
-          />
-          <Route
-            path="project"
-            element={
-              <ProjectSourceStep
+              <WelcomePage
                 state={state}
                 setState={setState}
-                footer={
-                  <SetupFooter
-                    onCancel={cancel}
-                    onContinue={() => {
-                      if (state.repositoryScenario === "existing_forge") {
-                        openExistingProject();
-                        return;
-                      }
-                      navigate(withReturn("/setup/coding-agent", returnTo));
-                    }}
-                    continueLabel={state.repositoryScenario === "existing_forge" ? "Open project dashboard" : "Continue"}
-                    disabled={!state.environmentReady || state.repositoryScenario === "not_repo"}
-                  />
-                }
+                showDemoControls={showDemoControls}
+                onProceed={() => {
+                  if (state.repositoryScenario === "existing_forge") {
+                    openExistingProject();
+                    return;
+                  }
+                  navigate(withReturn("/setup/coding-agent", returnTo));
+                }}
               />
             }
           />
@@ -243,23 +204,7 @@ export function SetupFlow() {
                 onGuidance={(agent) => setGuidance(agent)}
                 footer={
                   <SetupFooter
-                    onBack={() => navigate(withReturn("/setup/project", returnTo))}
-                    onCancel={cancel}
-                    onContinue={() => navigate(withReturn("/setup/code-platform", returnTo))}
-                  />
-                }
-              />
-            }
-          />
-          <Route
-            path="code-platform"
-            element={
-              <CodePlatformStep
-                state={state}
-                setState={setState}
-                footer={
-                  <SetupFooter
-                    onBack={() => navigate(withReturn("/setup/coding-agent", returnTo))}
+                    onBack={() => navigate(withReturn("/setup/welcome", returnTo))}
                     onCancel={cancel}
                     onContinue={() => navigate(withReturn("/setup/issue-tracker", returnTo))}
                   />
@@ -275,7 +220,7 @@ export function SetupFlow() {
                 setState={setState}
                 footer={
                   <SetupFooter
-                    onBack={() => navigate(withReturn("/setup/code-platform", returnTo))}
+                    onBack={() => navigate(withReturn("/setup/coding-agent", returnTo))}
                     onCancel={cancel}
                     onContinue={() => navigate(withReturn("/setup/project-details", returnTo))}
                   />
@@ -326,7 +271,7 @@ export function SetupFlow() {
           />
           <Route
             index
-            element={<Navigate to={projects.length ? "/setup/project" : "/setup/welcome"} replace />}
+            element={<Navigate to="/setup/welcome" replace />}
           />
           <Route path="*" element={<Navigate to="/setup/welcome" replace />} />
         </Routes>
@@ -340,9 +285,9 @@ function withReturn(path: string, returnTo?: string) {
   return returnTo ? `${path}?returnTo=${returnTo}` : path;
 }
 
-function SetupStepper({ current }: { current: number }) {
+function SetupStepper({ current, compact = false }: { current: number; compact?: boolean }) {
   return (
-    <nav className="setup-stepper" aria-label="Setup progress">
+    <nav className={`setup-stepper ${compact ? "compact" : ""}`} aria-label="Setup progress">
       {steps.map((step, index) => (
         <div
           key={step.path}
@@ -358,14 +303,72 @@ function SetupStepper({ current }: { current: number }) {
 }
 
 function WelcomePage({
-  onStartInitialize,
-  onStartJoin,
-  onLoadDemo,
+  state,
+  setState,
+  showDemoControls,
+  onProceed,
 }: {
-  onStartInitialize: () => void;
-  onStartJoin: () => void;
-  onLoadDemo: () => void;
+  state: SetupState;
+  setState: React.Dispatch<React.SetStateAction<SetupState>>;
+  showDemoControls: boolean;
+  onProceed: () => void;
 }) {
+  const [checkState, setCheckState] = useState<"idle" | "checking" | "done">("idle");
+  const hasRepoSelection = Boolean(state.localPath.trim());
+
+  useEffect(() => {
+    if (!hasRepoSelection || checkState !== "idle") return;
+    runCheck(state.repositoryScenario);
+  }, [checkState, hasRepoSelection, state.repositoryScenario]);
+
+  const runCheck = (scenario: RepositoryScenario) => {
+    setCheckState("checking");
+    setState((current) => ({
+      ...current,
+      mode: scenario === "existing_forge" ? "join" : "initialize",
+      repositoryScenario: scenario,
+      environmentReady: false,
+    }));
+    window.setTimeout(() => {
+      setState((current) => ({
+        ...current,
+        mode: scenario === "existing_forge" ? "join" : "initialize",
+        repositoryScenario: scenario,
+        environmentReady: scenario !== "not_repo",
+      }));
+      setCheckState("done");
+    }, 550);
+  };
+
+  const browse = () => {
+    const mockPath = repositoryOptions[0];
+    setCheckState("idle");
+    setState((current) => ({
+      ...current,
+      localPath: mockPath,
+      repositoryUrl: "",
+      environmentReady: false,
+    }));
+  };
+
+  const scenarioLabel =
+    state.repositoryScenario === "existing_forge"
+      ? "Existing Forge project detected (simulated)"
+      : state.repositoryScenario === "new_forge"
+        ? "GitHub repository without Forge setup detected (simulated)"
+        : "Selected folder is not a valid GitHub repository (simulated)";
+
+  const selectedAgentState = state.agentStates[state.codingAgent];
+
+  const continueDisabled =
+    !state.environmentReady ||
+    state.repositoryScenario === "not_repo" ||
+    !selectedAgentState.installed ||
+    !selectedAgentState.authenticated;
+
+  const continueLabel =
+    state.repositoryScenario === "existing_forge" ? "Load existing project" : "Setup new project";
+
   return (
     <div className="welcome-card">
       <div className="welcome-visual">
@@ -377,182 +380,18 @@ function WelcomePage({
       <span className="setup-eyebrow">Get started</span>
       <h1>Welcome to Forge</h1>
       <p>
-        This is a visual prototype. Every branch in setup is simulated so you can demo both
-        initializing a project and joining an existing Forge workspace.
+        Choose a local repository. Forge will auto-detect whether an existing
+        .forge project is present and start the correct flow.
       </p>
-      <button className="setup-button primary large" onClick={onStartInitialize}>
-        <Folder size={17} /> Initialize new project <ArrowRight size={16} />
-      </button>
-      <button className="setup-button secondary large" onClick={onStartJoin}>
-        <Search size={17} /> Join existing project
-      </button>
-      <div className="welcome-demo">
-        <span>Prototype only</span>
-        <button className="setup-demo-button" onClick={onLoadDemo}><Play size={14} /> Load demo workspace</button>
-      </div>
-    </div>
-  );
-}
-
-function StepHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
-  return (
-    <div className="setup-page-header">
-      <span className="setup-eyebrow">{eyebrow}</span>
-      <h1>{title}</h1>
-      <p>{description}</p>
-    </div>
-  );
-}
-
-function ProjectSourceStep({
-  state,
-  setState,
-  footer,
-}: {
-  state: SetupState;
-  setState: React.Dispatch<React.SetStateAction<SetupState>>;
-  footer: ReactNode;
-}) {
-  const [checkState, setCheckState] = useState<"idle" | "checking" | "done">("idle");
-  const hasRepoSelection =
-    state.mode === "join" ? Boolean(state.repositoryUrl.trim()) : Boolean(state.localPath.trim());
-
-  useEffect(() => {
-    if (!hasRepoSelection || checkState !== "idle") return;
-    runCheck();
-  }, [checkState, hasRepoSelection]);
-
-  const runCheck = (nextScenario?: RepositoryScenario) => {
-    const scenario = nextScenario ?? state.repositoryScenario;
-    setCheckState("checking");
-    setState((current) => ({
-      ...current,
-      repositoryScenario: scenario,
-      environmentReady: false,
-    }));
-    window.setTimeout(() => {
-      setState((current) => ({
-        ...current,
-        repositoryScenario: scenario,
-        environmentReady: scenario !== "not_repo",
-      }));
-      setCheckState("done");
-    }, 550);
-  };
-
-  const scenarioLabel =
-    state.repositoryScenario === "existing_forge"
-      ? "Existing Forge project detected (simulated)"
-      : state.repositoryScenario === "new_forge"
-        ? "GitHub repository without Forge setup detected (simulated)"
-        : "Selected folder is not a valid GitHub repository (simulated)";
-
-  return (
-    <>
-      <StepHeader
-        eyebrow="Step 1 of 6"
-        title="Project"
-        description="Select a repository source, then run a simulated environment and repo check. No real commands are executed."
-      />
-      <SetupSection title="Project folder" description="Pick how you want to start this demo.">
-        <div className="setup-inline-actions compact-links">
-          <button
-            className={state.mode === "initialize" ? "setup-link-button active-link" : "setup-link-button"}
-            onClick={() =>
-              {
-                setCheckState("idle");
-                setState((current) => ({
-                  ...current,
-                  mode: "initialize",
-                  repositoryScenario: "new_forge",
-                  repositoryUrl: "",
-                  environmentReady: false,
-                }));
-              }
-            }
-          >
-            <Folder size={14} /> Initialize project
-          </button>
-          <button
-            className={state.mode === "join" ? "setup-link-button active-link" : "setup-link-button"}
-            onClick={() =>
-              {
-                setCheckState("idle");
-                setState((current) => ({
-                  ...current,
-                  mode: "join",
-                  localPath: "",
-                  repositoryScenario: "existing_forge",
-                  environmentReady: false,
-                }));
-              }
-            }
-          >
-            <Search size={14} /> Join existing project
-          </button>
+      <label className="setup-field">
+        <span>Repository folder</span>
+        <div className="folder-picker">
+          <FolderOpen size={16} />
+          <input value={state.localPath} placeholder="Choose a local repository" readOnly />
+          <button type="button" onClick={browse}>Browse</button>
         </div>
-
-        {!hasRepoSelection && (
-          <div className="setup-empty-state">
-            <Folder size={18} />
-            <strong>Select a repository to start simulated checks.</strong>
-            <span>
-              {state.mode === "join"
-                ? "Paste a repository URL below."
-                : "Choose one of the mocked local repositories below."}
-            </span>
-          </div>
-        )}
-
-        {state.mode === "initialize" ? (
-          <label className="setup-field">
-            <span>Mocked local repository</span>
-            <div className="folder-picker">
-              <Folder size={16} />
-              <select
-                value={state.localPath}
-                onChange={(event) =>
-                  {
-                    setCheckState("idle");
-                    setState((current) => ({
-                      ...current,
-                      localPath: event.target.value,
-                      repositoryScenario: "new_forge",
-                      environmentReady: false,
-                    }));
-                  }
-                }
-              >
-                <option value="">Select mocked repository</option>
-                {repositoryOptions.map((path) => (
-                  <option key={path} value={path}>{path}</option>
-                ))}
-              </select>
-              <button type="button" onClick={() => runCheck()} disabled={!state.localPath}>Refresh</button>
-            </div>
-          </label>
-        ) : (
-          <label className="setup-field">
-            <span>Repository URL</span>
-            <input
-              value={state.repositoryUrl}
-              placeholder="https://github.com/org/repo"
-              onChange={(event) =>
-                {
-                  setCheckState("idle");
-                  setState((current) => ({
-                    ...current,
-                    repositoryUrl: event.target.value,
-                    repositoryScenario: "existing_forge",
-                    environmentReady: false,
-                  }));
-                }
-              }
-            />
-          </label>
-        )}
-      </SetupSection>
-      {hasRepoSelection && <SetupSection title="Environment + repository check" description="Prototype simulation only. No commands are executed.">
+      </label>
+      {hasRepoSelection && <div className="home-checks">
         <div className={`environment-card ${state.environmentReady ? "ready" : "warning"}`}>
           <div className="environment-heading">
             <span>
@@ -570,7 +409,7 @@ function ProjectSourceStep({
                 {checkState === "checking"
                   ? "Validating repository and prerequisites."
                   : checkState === "idle"
-                    ? "Select a repository source first, then run check."
+                    ? "Select a repository first."
                     : state.environmentReady
                       ? "Forge can continue for the selected setup path."
                       : "Continue is blocked until checks pass."}
@@ -582,23 +421,47 @@ function ProjectSourceStep({
             <CheckItem label="Local Git support" ok={checkState === "done"} />
             <CheckItem label="Repository is valid" ok={checkState === "done" && state.repositoryScenario !== "not_repo"} />
             <CheckItem label="Forge config detected" ok={checkState === "done" && state.repositoryScenario === "existing_forge"} />
+            <CheckItem label={`${agentLabels[state.codingAgent]} installed`} ok={checkState === "done" && selectedAgentState.installed} />
+            <CheckItem label={`${agentLabels[state.codingAgent]} authenticated`} ok={checkState === "done" && selectedAgentState.authenticated} />
           </div>
           <div className="detected-panel compact">
             <span className="detected-title"><Search size={14} /> Detected</span>
+            <span className="muted" style={{ gridColumn: "1 / -1", fontSize: 11 }}>
+              {checkState === "done"
+                ? state.repositoryScenario === "existing_forge"
+                  ? "Flow: Load existing Forge project"
+                  : state.repositoryScenario === "new_forge"
+                    ? "Flow: Setup new Forge project"
+                    : "Flow blocked"
+                : "No flow selected yet."}
+            </span>
             <span className="muted" style={{ gridColumn: "1 / -1", fontSize: 11 }}>{checkState === "done" ? scenarioLabel : "No detection yet."}</span>
           </div>
-          <div className="setup-inline-actions compact-links">
-            <span className="muted">Simulated detection result:</span>
-            <button className="setup-demo-link" onClick={() => runCheck("new_forge")}>No Forge project</button>
-            <button className="setup-demo-link" onClick={() => runCheck("existing_forge")}>Existing Forge project</button>
-            <button className="setup-demo-link" onClick={() => runCheck("not_repo")}>Invalid repository</button>
-          </div>
         </div>
-      </SetupSection>}
-      {footer}
-    </>
+      </div>}
+      {showDemoControls && <div className="setup-inline-actions compact-links centered-actions">
+        <span className="muted">Demo detection:</span>
+        <button className="setup-demo-link" onClick={() => runCheck("new_forge")}>New project flow</button>
+        <button className="setup-demo-link" onClick={() => runCheck("existing_forge")}>Load existing Forge</button>
+        <button className="setup-demo-link" onClick={() => runCheck("not_repo")}>Invalid repo</button>
+      </div>}
+      <button className="setup-button primary large" disabled={continueDisabled} onClick={onProceed}>
+        {continueLabel} <ArrowRight size={16} />
+      </button>
+    </div>
   );
 }
+
+function StepHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
+  return (
+    <div className="setup-page-header">
+      <span className="setup-eyebrow">{eyebrow}</span>
+      <h1>{title}</h1>
+      <p>{description}</p>
+    </div>
+  );
+}
+
 
 function CodingAgentStep({
   state,
@@ -644,7 +507,7 @@ function CodingAgentStep({
   return (
     <>
       <StepHeader
-        eyebrow="Step 2 of 6"
+        eyebrow="Step 2 of 5"
         title="Coding agent"
         description="Select an agent and profile. This is global readiness + project preference in one simulated step."
       />
@@ -707,10 +570,11 @@ function CodingAgentStep({
         </div>
       )}
       <div className="setup-step-gap" />
-      <SetupSection
-        title="Model profile"
-        description="Compact profile cards to keep this step lightweight in the demo."
-      >
+      <div className="setup-plain-section">
+        <div className="setup-section-heading">
+          <h2>Model profile</h2>
+          <p>Choose how the coding agent balances quality, speed, and cost for workflow execution.</p>
+        </div>
         <div className="profile-grid">
           {profiles.map((profile) => (
             <button
@@ -734,7 +598,7 @@ function CodingAgentStep({
             </button>
           ))}
         </div>
-      </SetupSection>
+      </div>
       {footer}
     </>
   );
@@ -836,7 +700,7 @@ function IssueTrackerStep({
   return (
     <>
       <StepHeader
-        eyebrow="Step 4 of 6"
+        eyebrow="Step 3 of 5"
         title="Issue tracker"
         description="Pick tracker integration and simulate connection results."
       />
@@ -901,7 +765,7 @@ function ProjectDetailsStep({
   return (
     <>
       <StepHeader
-        eyebrow="Step 5 of 6"
+        eyebrow="Step 4 of 5"
         title="Project details"
         description="All fields are text inputs in this prototype to emphasize editable setup data."
       />
@@ -982,7 +846,6 @@ function ReviewStep({
   onCancel: () => void;
 }) {
   const navigate = useNavigate();
-  const [simulateFailure, setSimulateFailure] = useState(false);
   const [validationIndex, setValidationIndex] = useState(0);
   const validationSteps = [
     "Validating project scenario",
@@ -1004,21 +867,12 @@ function ReviewStep({
       }
 
       window.clearInterval(interval);
-      if (simulateFailure) {
-        setState((current) => ({
-          ...current,
-          validationStatus: "invalid",
-          validationMessage: "Issue tracker connection could not be validated.",
-        }));
-        return;
-      }
-
       setState((current) => ({ ...current, validationStatus: "valid", validationMessage: undefined }));
       window.setTimeout(() => onValidated(toProject(state)), 350);
     }, 650);
 
     return () => window.clearInterval(interval);
-  }, [onValidated, setState, simulateFailure, state, state.validationStatus, validationSteps.length]);
+  }, [onValidated, setState, state, state.validationStatus, validationSteps.length]);
 
   const edit = (path: string) => navigate(withReturn(`/setup/${path}`, returnTo));
   const rows = [
@@ -1033,12 +887,6 @@ function ReviewStep({
       value: `${agentLabels[state.codingAgent]} · ${modelLabels[state.modelProfile]}`,
       detail: state.agentStates[state.codingAgent].authenticated ? "Installed and authenticated" : "Setup required",
       path: "coding-agent",
-    },
-    {
-      title: "Code platform",
-      value: platformLabels[state.codePlatform],
-      detail: connectionLabel(state.codePlatformStatus),
-      path: "code-platform",
     },
     {
       title: "Issue tracker",
@@ -1057,7 +905,7 @@ function ReviewStep({
   return (
     <>
       <StepHeader
-        eyebrow="Step 6 of 6"
+        eyebrow="Step 5 of 5"
         title="Review setup"
         description="Confirm all simulated decisions before adding the project to Forge."
       />
@@ -1082,7 +930,6 @@ function ReviewStep({
           <code>.forge/config/agents.toml</code>
           <code>.forge/config/project.toml</code>
           <code>.forge/config/toolchain.toml</code>
-          <button><FileText size={14} /> Preview configuration</button>
         </aside>
       </div>
       {state.validationStatus === "invalid" && (
@@ -1110,22 +957,16 @@ function ReviewStep({
         <div className="validation-progress">
           <LoaderCircle size={22} />
           <div>
-            <strong>Validating project setup...</strong>
-            <p>{validationSteps[validationIndex]}...</p>
-            <div className="validation-track">
+            <div className="validation-progress-head">
+              <strong>Validating project setup...</strong>
+              <p>{validationSteps[validationIndex]}...</p>
+            </div>
+            <div className="validation-track full">
               <span style={{ width: `${((validationIndex + 1) / validationSteps.length) * 100}%` }} />
             </div>
           </div>
         </div>
       )}
-      <label className="setup-demo-toggle">
-        <input
-          type="checkbox"
-          checked={simulateFailure}
-          onChange={(event) => setSimulateFailure(event.target.checked)}
-        />
-        <span>Prototype control: simulate validation failure</span>
-      </label>
       <div className="setup-review-footer">
         <div className="setup-footer-bar">
           <button className="setup-button ghost" onClick={onCancel}>Cancel</button>

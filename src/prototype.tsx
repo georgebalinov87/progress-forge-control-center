@@ -22,13 +22,22 @@ type PrototypeContextValue = {
   projects: Project[];
   issues: Issue[];
   workflows: WorkflowRun[];
+  backlogReadyByProject: Record<string, boolean>;
   role: Role;
   setRole: (role: Role) => void;
+  showDemoControls: boolean;
+  setShowDemoControls: (show: boolean) => void;
   artifactSelection: ArtifactSelection;
   openArtifact: (artifact: Artifact) => void;
   setArtifactVersion: (version: number) => void;
   closeArtifact: () => void;
-  startWorkflow: (projectId: string, issueId: string, execution: "local" | "cloud", agent: string) => string;
+  startWorkflow: (
+    projectId: string,
+    issueId: string,
+    execution: "local" | "cloud",
+    agent: string,
+    options?: { workflowName?: string; issueTitle?: string; steps?: WorkflowRun["steps"] },
+  ) => string;
   pauseWorkflow: (id: string) => void;
   resumeWorkflow: (id: string) => void;
   cancelWorkflow: (id: string) => void;
@@ -38,6 +47,7 @@ type PrototypeContextValue = {
   approveStep: (workflowId: string) => void;
   rejectStep: (workflowId: string) => void;
   requestChanges: (workflowId: string, feedback: string) => void;
+  runBacklogImport: (projectId: string) => void;
   loadDemoWorkspace: () => void;
   addProject: (project: Project) => void;
   resetDemo: () => void;
@@ -94,7 +104,9 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowRun[]>([]);
+  const [backlogReadyByProject, setBacklogReadyByProject] = useState<Record<string, boolean>>({});
   const [role, setRole] = useState<Role>("active");
+  const [showDemoControls, setShowDemoControls] = useState(false);
   const [artifactSelection, setArtifactSelection] = useState<ArtifactSelection>(null);
 
   const updateWorkflow = useCallback(
@@ -195,11 +207,17 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startWorkflow = useCallback(
-    (projectId: string, issueId: string, execution: "local" | "cloud", agent: string) => {
+    (
+      projectId: string,
+      issueId: string,
+      execution: "local" | "cloud",
+      agent: string,
+      options?: { workflowName?: string; issueTitle?: string; steps?: WorkflowRun["steps"] },
+    ) => {
       const id = `wf-${issueId}-${Date.now()}`;
-      const steps = workflowSteps();
-      steps[0] = {
-        ...steps[0],
+      const flowSteps = options?.steps?.length ? structuredClone(options.steps) : workflowSteps();
+      flowSteps[0] = {
+        ...flowSteps[0],
         status: "running",
         progress: 8,
         activity: "Reading the issue and identifying repository context…",
@@ -208,20 +226,42 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
         id,
         projectId,
         issueId,
-        workflowName: "Issue → Pull Request",
+        workflowName: options?.workflowName ?? "Issue → Pull Request",
         startedBy: "Stefan",
         execution,
         agent,
         status: "running",
         startedAt: "Just now",
-        steps,
+        steps: flowSteps,
         simulated: true,
       };
+
+      setIssues((current) => {
+        const exists = current.some((item) => item.projectId === projectId && item.id === issueId);
+        if (exists) return current;
+        return [
+          {
+            id: issueId,
+            projectId,
+            title: options?.issueTitle?.trim() || "Customer supplied issue",
+            description:
+              "This issue was entered manually and can map to GitHub, Jira, Azure DevOps, or another tracker.",
+            status: "open",
+            assignee: "Stefan",
+            labels: ["external"],
+          },
+          ...current,
+        ];
+      });
       setWorkflows((current) => [workflow, ...current]);
       return id;
     },
     [],
   );
+
+  const runBacklogImport = useCallback((projectId: string) => {
+    setBacklogReadyByProject((current) => ({ ...current, [projectId]: true }));
+  }, []);
 
   const pauseWorkflow = (id: string) =>
     updateWorkflow(id, (workflow) => ({
@@ -352,8 +392,11 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
       projects,
       issues,
       workflows,
+      backlogReadyByProject,
       role,
       setRole,
+      showDemoControls,
+      setShowDemoControls,
       artifactSelection,
       openArtifact: (artifact) =>
         setArtifactSelection({ artifact, version: artifact.versions[0].version }),
@@ -370,16 +413,22 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
       approveStep,
       rejectStep,
       requestChanges,
+      runBacklogImport,
       loadDemoWorkspace: () => {
-        setProjects(structuredClone(seededProjects));
+        const nextProjects = structuredClone(seededProjects);
+        setProjects(nextProjects);
         setIssues(structuredClone(seededIssues));
         setWorkflows(cloneWorkflows());
+        setBacklogReadyByProject(
+          Object.fromEntries(nextProjects.map((project) => [project.id, false])),
+        );
         setArtifactSelection(null);
       },
       addProject: (project) => {
         setProjects((current) =>
           current.some((item) => item.id === project.id) ? current : [...current, project],
         );
+        setBacklogReadyByProject((current) => ({ ...current, [project.id]: false }));
         setIssues((current) =>
           current.some((item) => item.projectId === project.id)
             ? current
@@ -390,11 +439,25 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
         setProjects([]);
         setIssues([]);
         setWorkflows([]);
+        setBacklogReadyByProject({});
         setRole("active");
+        setShowDemoControls(false);
         setArtifactSelection(null);
       },
     }),
-    [artifactSelection, issues, projects, role, startWorkflow, updateWorkflow, workflows],
+    [
+      artifactSelection,
+      backlogReadyByProject,
+      issues,
+      projects,
+      role,
+      setShowDemoControls,
+      runBacklogImport,
+      showDemoControls,
+      startWorkflow,
+      updateWorkflow,
+      workflows,
+    ],
   );
 
   return <PrototypeContext.Provider value={value}>{children}</PrototypeContext.Provider>;
